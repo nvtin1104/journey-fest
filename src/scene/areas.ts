@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { ROOM, SCALE, WALL } from '../config';
 import { facingAngle, toWorldX, toWorldZ, unionRect, worldRect, type Facing, type Rect } from '../map/coords';
 import type { ParsedMap } from '../map/parse';
-import { Instancer } from './booths';
+import { Instancer } from './instancer';
 import { shade, tint, toon, toonUnique, unitBox } from './materials';
-import { FONT, labelTexture, type SignAtlas } from './signAtlas';
+import { FONT, labelTexture, SIGN_GAP, type SignAtlas } from './signAtlas';
 
 function frameOf(r: Rect, facing: Facing) {
   const { cx, cz } = worldRect(r);
@@ -84,24 +84,26 @@ export function buildAreas(map: ParsedMap, atlas: SignAtlas): AreasResult {
   const animated: Array<(t: number) => void> = [];
 
   // Closed back-of-house rooms, WCs and the VIP room: solid blocks with a door and a sign.
-  const doorMat = toon('#7c6fa6');
+  // Bodies stay separate meshes (each fades on its own); roof caps and doors are instanced.
+  const roomParts = new Instancer();
   for (const r of map.rooms) {
     const { base, W, D } = frameOf(r.rect, r.facing);
-    const mat = toonUnique(r.color, { transparent: true, opacity: 1 });
-    const body = meshAt(mat, local(base, W - 0.1, ROOM.height, D - 0.1, 0, ROOM.height / 2, 0));
+    const body = meshAt(toonUnique(r.color), local(base, W - 0.1, ROOM.height, D - 0.1, 0, ROOM.height / 2, 0));
     body.name = 'room';
     group.add(body);
     occluders.push(body);
-    group.add(meshAt(toon(shade(r.color, 0.25)), local(base, W + 0.1, 0.16, D + 0.1, 0, ROOM.height + 0.08, 0)));
+    roomParts.push(local(base, W + 0.1, 0.16, D + 0.1, 0, ROOM.height + 0.08, 0), shade(r.color, 0.25));
     const doorW = Math.min(1.4, W * 0.4);
-    group.add(meshAt(doorMat, local(base, doorW, 2.2, 0.06, 0, 1.1, D / 2 - 0.03)));
+    roomParts.push(local(base, doorW, 2.2, 0.06, 0, 1.1, D / 2 - 0.03), '#7c6fa6');
     if (r.showLabel) {
-      atlas.add({ code: '', name: r.label, color: '#6c5fa0' }, Math.min(W * 0.8, 4), 0.5, place(base, 0, 2.6, D / 2 - 0.04 + 0.002));
+      atlas.add({ code: '', name: r.label, color: '#6c5fa0' }, Math.min(W * 0.8, 4), 0.5, place(base, 0, 2.6, D / 2 - 0.05 + SIGN_GAP));
       const tag = makeLabel(r.label, 0.8, { bg: 'rgba(108,95,160,0.9)', fg: '#ffffff', size: 48 });
       tag.position.set(toWorldX(r.rect.x + r.rect.w / 2), ROOM.height + 1, toWorldZ(r.rect.y + r.rect.h / 2));
       group.add(tag);
     }
   }
+
+  group.add(roomParts.build(unitBox, toonUnique('#ffffff'), 'room-parts'));
 
   // Standing boards (MENU OC & PET, ARTIST ALLEY MAP…).
   for (const b of map.billboards) {
@@ -110,7 +112,7 @@ export function buildAreas(map: ParsedMap, atlas: SignAtlas): AreasResult {
     const bottom = 0.4;
     group.add(meshAt(toon(b.color), local(base, W, h + 0.12, 0.12, 0, bottom + h / 2, 0)));
     for (const sx of [-1, 1]) group.add(meshAt(toon('#8d86b0'), local(base, 0.1, bottom + 0.1, 0.1, sx * (W / 2 - 0.4), (bottom + 0.1) / 2, 0)));
-    atlas.add({ code: '', name: b.label, color: b.color, solid: true }, W - 0.2, h - 0.2, place(base, 0, bottom + h / 2, 0.062));
+    atlas.add({ code: '', name: b.label, color: b.color, solid: true }, W - 0.2, h - 0.2, place(base, 0, bottom + h / 2, 0.06 + SIGN_GAP));
   }
 
   // Structural pillars.
@@ -137,8 +139,9 @@ export function buildAreas(map: ParsedMap, atlas: SignAtlas): AreasResult {
     group.add(strip);
     const sh = 4.2;
     group.add(meshAt(toon('#2e2b40'), local(base, W - 0.6, sh + 0.3, 0.3, 0, ph + sh / 2, -D / 2 + 0.3)));
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W - 1.2, sh - 0.4), new THREE.MeshBasicMaterial({ map: screenTexture(), toneMapped: false }));
-    place(base, 0, ph + sh / 2, -D / 2 + 0.46).decompose(screen.position, screen.quaternion, screen.scale);
+    const screenMat = new THREE.MeshBasicMaterial({ map: screenTexture(), toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W - 1.2, sh - 0.4), screenMat);
+    place(base, 0, ph + sh / 2, -D / 2 + 0.45 + SIGN_GAP).decompose(screen.position, screen.quaternion, screen.scale);
     group.add(screen);
     const trussMat = toon('#cfd3e6');
     const th = ph + sh + 1.6;

@@ -13,6 +13,11 @@ describe('parseMap', () => {
     expect(map.halls.map((h) => h.id)).not.toContain('7badbf62-7d1a-4488-a19c-c9e483337765');
   });
 
+  it('seals halls that have no door', () => {
+    const sealed = map.halls.filter((h) => h.sealed);
+    expect(sealed.map((h) => h.id)).toEqual(['c0835c79-1e26-46fb-bf93-6e607177b92e']);
+  });
+
   it('turns every small gate into a door', () => {
     expect(map.gates).toHaveLength(16);
     expect(map.doors).toHaveLength(16);

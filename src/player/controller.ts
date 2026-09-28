@@ -3,17 +3,27 @@ import { PLAYER } from '../config';
 import type { CollisionWorld } from '../map/colliders';
 import type { Avatar } from './avatar';
 
+/** Turn rate (rad/s) for A/D or the joystick's x axis in focus mode. */
+const TURN_SPEED = 2.6;
+
 const lerpAngle = (a: number, b: number, t: number) => {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
 };
 
-/** Keyboard / joystick / tap-to-move locomotion with circle-vs-box collision. */
+/**
+ * Keyboard / joystick / tap-to-move locomotion with circle-vs-box collision.
+ *
+ * - Free camera: input is relative to the camera (W walks away from the camera).
+ * - Focus mode: W/S walk along the character's heading and A/D turn it, so a camera that
+ *   follows the heading always looks where the character is going.
+ */
 export class PlayerController {
   readonly position = new THREE.Vector3();
   heading = 0;
   speed = 0;
+  focus = false;
   private velocity = new THREE.Vector2();
   private keys = new Set<string>();
   /** Virtual joystick input, x = right, y = forward, magnitude ≤ 1. */
@@ -35,6 +45,16 @@ export class PlayerController {
     return this.keys.size > 0 || Math.hypot(this.joystick.x, this.joystick.y) > 0.05;
   }
 
+  /** Swaps the character model in place (e.g. male ↔ female). */
+  setAvatar(avatar: Avatar) {
+    const old = this.avatar;
+    old.root.parent?.add(avatar.root);
+    old.root.removeFromParent();
+    old.dispose();
+    this.avatar = avatar;
+    this.sync(0);
+  }
+
   teleport(x: number, z: number, heading = this.heading) {
     const p = this.world.nearestFree(x, z, PLAYER.radius) ?? { x, z };
     this.position.set(p.x, 0, p.z);
@@ -49,26 +69,45 @@ export class PlayerController {
     this.stuckTime = 0;
   }
 
-  update(dt: number, forward: { x: number; z: number }) {
+  /** Input axes from keyboard + joystick: x = right/turn, y = forward. */
+  private axes() {
     const k = this.keys;
-    let ix = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
-    let iy = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-    ix += this.joystick.x;
-    iy += this.joystick.y;
-    let mag = Math.hypot(ix, iy);
-    if (mag > 1) {
-      ix /= mag;
-      iy /= mag;
-      mag = 1;
+    let x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+    let y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
+    x += this.joystick.x;
+    y += this.joystick.y;
+    const run = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(this.joystick.x, this.joystick.y) > 0.92;
+    return { x: THREE.MathUtils.clamp(x, -1, 1), y: THREE.MathUtils.clamp(y, -1, 1), run };
+  }
+
+  update(dt: number, forward: { x: number; z: number }) {
+    const input = this.axes();
+    let dx = 0;
+    let dz = 0;
+    let speed = 0;
+    let faceMovement = true;
+
+    if (this.focus) {
+      // Tank-style: turn with x, walk along the heading with y (backwards is slower and keeps facing forward).
+      this.heading -= input.x * TURN_SPEED * dt;
+      if (Math.abs(input.y) > 0.05) {
+        dx = Math.sin(this.heading) * Math.sign(input.y);
+        dz = Math.cos(this.heading) * Math.sign(input.y);
+        speed = (input.run && input.y > 0 ? PLAYER.runSpeed : PLAYER.walkSpeed) * Math.abs(input.y) * (input.y < 0 ? 0.6 : 1);
+        faceMovement = false;
+      }
+    } else {
+      const mag = Math.min(1, Math.hypot(input.x, input.y));
+      if (mag > 0.05) {
+        const right = { x: -forward.z, z: forward.x };
+        dx = forward.x * input.y + right.x * input.x;
+        dz = forward.z * input.y + right.z * input.x;
+        speed = (input.run ? PLAYER.runSpeed : PLAYER.walkSpeed) * mag;
+      }
     }
 
-    const right = { x: -forward.z, z: forward.x };
-    let dx = forward.x * iy + right.x * ix;
-    let dz = forward.z * iy + right.z * ix;
-    const run = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(this.joystick.x, this.joystick.y) > 0.92;
-    let speed = (run ? PLAYER.runSpeed : PLAYER.walkSpeed) * mag;
-
-    if (mag > 0.05) {
+    const manual = Math.abs(input.x) > 0.05 || Math.abs(input.y) > 0.05;
+    if (manual) {
       this.moveTarget = null;
     } else if (this.moveTarget) {
       const tx = this.moveTarget.x - this.position.x;
@@ -80,6 +119,7 @@ export class PlayerController {
         dx = tx / dist;
         dz = tz / dist;
         speed = Math.min(dist > 12 ? PLAYER.runSpeed : PLAYER.walkSpeed, dist * 4);
+        faceMovement = true;
       }
     }
 
@@ -105,7 +145,7 @@ export class PlayerController {
       this.stuckTime = this.speed < 0.3 * Math.max(0.5, this.velocity.length()) ? this.stuckTime + dt : 0;
       if (this.stuckTime > 0.6) this.moveTarget = null;
     }
-    if (this.velocity.length() > 0.2) {
+    if (faceMovement && this.velocity.length() > 0.2) {
       this.heading = lerpAngle(this.heading, Math.atan2(this.velocity.x, this.velocity.y), 1 - Math.exp(-12 * dt));
     }
     this.sync(dt);

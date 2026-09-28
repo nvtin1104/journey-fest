@@ -16,13 +16,17 @@ const lerpAngle = (a: number, b: number, t: number) => {
  */
 export class FollowCamera {
   mode: 'follow' | 'overview' = 'follow';
+  /** Focus mode: the camera swings behind the character so it looks where the character walks. */
+  focus = false;
+  /** Slow turntable spin of the overview (the start screen). */
+  showcase = false;
   yaw = 0;
   pitch = FOLLOW.pitch;
   distance = FOLLOW.distance;
   private targetYaw = 0;
   private targetPitch = FOLLOW.pitch;
   private targetDistance = FOLLOW.distance;
-  private focus = new THREE.Vector3();
+  private target = new THREE.Vector3();
   private followDistance = FOLLOW.distance;
   private followYaw = 0;
   private rate = 1.6;
@@ -31,6 +35,8 @@ export class FollowCamera {
   private pinchStart = 0;
   private dragStart: { x: number; y: number } | null = null;
   private dragged = false;
+  private lastDrag = -Infinity;
+  private clock = 0;
 
   /** Called with client coordinates when the canvas is tapped/clicked without dragging. */
   onTap: (x: number, y: number) => void = () => {};
@@ -49,14 +55,23 @@ export class FollowCamera {
     dom.style.touchAction = 'none';
   }
 
-  /** Starts high above `from` and flies down behind the visitor. */
-  intro(from: THREE.Vector3, yaw: number) {
-    this.focus.copy(from);
-    this.yaw = yaw + 0.8;
-    this.pitch = 1.2;
-    this.distance = 70;
+  /** Start screen: frame the whole venue from above and spin slowly. */
+  startShowcase() {
+    this.mode = 'overview';
+    this.showcase = true;
+    this.targetDistance = this.distance = OVERVIEW.distance;
+    this.targetPitch = this.pitch = OVERVIEW.pitch;
+    this.target.copy(this.overviewCenter);
+  }
+
+  /** Flies from wherever the camera is (usually the overview) down behind the visitor. */
+  intro(yaw: number) {
+    this.showcase = false;
+    this.mode = 'follow';
     this.targetYaw = yaw;
-    this.rate = 1.4;
+    this.targetPitch = FOLLOW.pitch;
+    this.targetDistance = FOLLOW.distance;
+    this.rate = 1.2;
   }
 
   skipIntro() {
@@ -113,6 +128,7 @@ export class FollowCamera {
     if (this.dragStart && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) > 6) this.dragged = true;
     if (!this.dragged) return;
     this.targetYaw -= dx * 0.006;
+    this.lastDrag = this.clock;
     this.targetPitch = THREE.MathUtils.clamp(this.targetPitch + dy * 0.004, 0.08, 1.4);
     this.rate = Math.max(this.rate, 6);
   };
@@ -145,10 +161,25 @@ export class FollowCamera {
     return { x: -Math.sin(this.yaw), z: -Math.cos(this.yaw) };
   }
 
-  update(dt: number, player: THREE.Vector3) {
+  setFocus(on: boolean, heading: number) {
+    this.focus = on;
+    if (on) this.targetYaw = heading + Math.PI;
+  }
+
+  /** `heading` is the visitor's facing (radians), used by focus mode. */
+  update(dt: number, player: THREE.Vector3, heading = 0) {
+    this.clock += dt;
+    if (this.showcase) this.targetYaw += dt * 0.05;
+    // Focus mode keeps the camera behind the heading, except right after the user dragged it.
+    if (this.focus && this.mode === 'follow' && this.clock - this.lastDrag > 1.5) {
+      this.targetYaw = heading + Math.PI;
+      this.rate = Math.max(this.rate, 4);
+    }
     const k = 1 - Math.exp(-this.rate * dt);
     const goal = this.mode === 'overview' ? this.overviewCenter : new THREE.Vector3(player.x, player.y + HEAD_HEIGHT, player.z);
-    this.focus.lerp(goal, this.mode === 'overview' ? k : 1 - Math.exp(-10 * dt));
+    // During the intro fly-in the target glides at the same pace as the zoom; afterwards it sticks to the visitor.
+    const followRate = this.rate < 6 && this.mode === 'follow' ? this.rate * 1.5 : 10;
+    this.target.lerp(goal, this.mode === 'overview' ? k : 1 - Math.exp(-followRate * dt));
     this.yaw = lerpAngle(this.yaw, this.targetYaw, k);
     this.pitch += (this.targetPitch - this.pitch) * k;
     this.distance += (this.targetDistance - this.distance) * k;
@@ -156,11 +187,11 @@ export class FollowCamera {
 
     const cp = Math.cos(this.pitch);
     this.camera.position.set(
-      this.focus.x + Math.sin(this.yaw) * cp * this.distance,
-      this.focus.y + Math.sin(this.pitch) * this.distance,
-      this.focus.z + Math.cos(this.yaw) * cp * this.distance,
+      this.target.x + Math.sin(this.yaw) * cp * this.distance,
+      this.target.y + Math.sin(this.pitch) * this.distance,
+      this.target.z + Math.cos(this.yaw) * cp * this.distance,
     );
-    this.camera.lookAt(this.focus);
+    this.camera.lookAt(this.target);
     this.fadeOccluders(dt, player);
   }
 
@@ -178,9 +209,16 @@ export class FollowCamera {
     for (const m of this.occluders) {
       const mat = m.material as THREE.MeshToonMaterial;
       const target = hidden.has(m) ? 0.18 : 1;
-      if (Math.abs(mat.opacity - target) < 0.005) continue;
-      mat.opacity += (target - mat.opacity) * k;
-      mat.depthWrite = mat.opacity > 0.98;
+      if (mat.opacity === target) continue;
+      const next = mat.opacity + (target - mat.opacity) * k;
+      mat.opacity = Math.abs(next - target) < 0.005 ? target : next;
+      // Only faded walls go through the transparent pass; opaque ones keep depth writes and stable sorting.
+      const faded = mat.opacity < 0.995;
+      if (mat.transparent !== faded) {
+        mat.transparent = faded;
+        mat.depthWrite = !faded;
+        mat.needsUpdate = true;
+      }
     }
   }
 }

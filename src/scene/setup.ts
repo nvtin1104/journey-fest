@@ -5,6 +5,8 @@ export interface SceneContext {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
+  /** Sky dome; keep it centred on the camera. */
+  sky: THREE.Mesh;
 }
 
 const SKY_TOP = new THREE.Color('#9fd3ff');
@@ -22,18 +24,23 @@ export function createScene(container: HTMLElement): SceneContext {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG_COLOR, 90, 320);
-  scene.add(skyDome());
+  const sky = skyDome();
+  scene.add(sky);
 
-  const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.3, 1800);
+  const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.5, 1800);
 
-  scene.add(new THREE.HemisphereLight('#e8f4ff', '#f4e6ff', 1.6));
-  const sun = new THREE.DirectionalLight('#fff4e6', 1.9);
+  // Pastel toon lighting: a cool lilac fill so the shaded side and cast shadows read lilac-blue
+  // instead of grey, and a warm, stronger sun for clear light/shadow contrast.
+  scene.add(new THREE.HemisphereLight('#e6e3ff', '#f6f0ff', 2.2));
+  const sun = new THREE.DirectionalLight('#fff0da', 1.35);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const s = 32;
-  Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 140 });
-  sun.shadow.bias = -0.0006;
-  sun.shadow.normalBias = 0.02;
+  Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 160 });
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.03;
+  // Soft edges (PCF with a Vogel-disk kernel in r186).
+  sun.shadow.radius = 2.5;
   scene.add(sun, sun.target);
 
   window.addEventListener('resize', () => {
@@ -42,13 +49,37 @@ export function createScene(container: HTMLElement): SceneContext {
     renderer.setSize(container.clientWidth, container.clientHeight);
   });
 
-  return { renderer, scene, camera, sun };
+  return { renderer, scene, camera, sun, sky };
 }
 
-/** Keeps the shadow frustum centred on the visitor so a single 2048 map stays crisp. */
+/** Direction from the ground towards the sun. */
+const SUN_OFFSET = new THREE.Vector3(36, 55, 22);
+const SUN_DIR = SUN_OFFSET.clone().normalize();
+/** Axes of the shadow camera (same construction as Matrix4.lookAt with +Y up). */
+const SUN_RIGHT = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), SUN_DIR).normalize();
+const SUN_UP = new THREE.Vector3().crossVectors(SUN_DIR, SUN_RIGHT).normalize();
+export const SHADOW_AXES = { right: SUN_RIGHT, up: SUN_UP };
+
+/**
+ * Moves `p` to the nearest point whose shadow-camera coordinates are whole texels.
+ * A shadow map that slides by fractions of a texel makes every shadow edge shimmer while walking.
+ */
+export function snapToShadowTexel(p: THREE.Vector3, texel: number): THREE.Vector3 {
+  const r = p.dot(SUN_RIGHT);
+  const u = p.dot(SUN_UP);
+  return p
+    .clone()
+    .addScaledVector(SUN_RIGHT, Math.round(r / texel) * texel - r)
+    .addScaledVector(SUN_UP, Math.round(u / texel) * texel - u);
+}
+
+/** Keeps the shadow frustum centred on the visitor so a single 2048 map stays crisp, snapped to its texel grid. */
 export function followSun(sun: THREE.DirectionalLight, target: THREE.Vector3) {
-  sun.target.position.copy(target);
-  sun.position.set(target.x + 28, target.y + 60, target.z + 18);
+  const cam = sun.shadow.camera;
+  const texel = (cam.right - cam.left) / sun.shadow.mapSize.x;
+  const p = snapToShadowTexel(target, texel);
+  sun.target.position.copy(p);
+  sun.position.copy(p).add(SUN_OFFSET);
 }
 
 function skyDome(): THREE.Mesh {

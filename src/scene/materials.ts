@@ -2,11 +2,16 @@ import * as THREE from 'three';
 
 let gradient: THREE.DataTexture | null = null;
 
-/** 3-step ramp that gives MeshToonMaterial its soft cel-shaded look. */
+/**
+ * Cel ramp for MeshToonMaterial, indexed by N·L remapped to 0..1.
+ * Faces turned away from the sun (N·L < 0) get no direct light, exactly like cast shadows, so the
+ * shaded side and shadows share one tone and self-shadowing noise on those faces is multiplied by 0.
+ */
 export function toonGradient(): THREE.DataTexture {
   if (gradient) return gradient;
-  const steps = new Uint8Array([150, 150, 150, 255, 210, 210, 210, 255, 255, 255, 255, 255]);
-  gradient = new THREE.DataTexture(steps, 3, 1, THREE.RGBAFormat);
+  const ramp = [0, 0, 190, 255];
+  const steps = new Uint8Array(ramp.flatMap((v) => [v, v, v, 255]));
+  gradient = new THREE.DataTexture(steps, ramp.length, 1, THREE.RGBAFormat);
   gradient.minFilter = THREE.NearestFilter;
   gradient.magFilter = THREE.NearestFilter;
   gradient.needsUpdate = true;

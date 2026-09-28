@@ -5,7 +5,7 @@ Tài liệu mô tả cách dựng bản đồ sự kiện 3D bằng three.js t�
 ## 1. Mục tiêu & phạm vi
 
 - Dựng **map 3D phẳng**: nền không có địa hình, mọi thứ nằm trên mặt sàn y = 0. Phong cách **pastel toon**: khối bo nhẹ, màu lấy đúng từ dữ liệu, ánh sáng mềm, bóng đổ nhẹ.
-- Người xem điều khiển **một nhân vật chibi** đi trong hội trường, không xuyên qua tường, gian hàng hay phòng.
+- Người xem chọn **nhân vật nam hoặc nữ** rồi điều khiển đi trong hội trường, không xuyên qua tường, gian hàng hay phòng.
 - Nhân vật **xuất hiện ở lối vào**, tức đầu mũi tên xanh lá ở vỉa hè dưới. Từ đó đi qua cửa khu **Check-in** để vào trong.
 - Các ô **xanh dương đậm** (`small gate`) là **cửa thông** giữa các khu, dựng thành lỗ mở trên tường.
 - Phần **xanh nhạt** (Sidewalk) là đường đi bộ. Đường nhựa (Road) chỉ để trang trí và không đi vào được.
@@ -47,7 +47,7 @@ Ngoài phạm vi hiện tại: multiplayer, dẫn đường tự động, nội 
    ├──── Hall 4 · CHECK-IN HALL, kho… ──────┤   cửa y=2210: x 610 · 1900 · 3120
    └────────────────────────────────────────┘   cửa y=2740: x 610 · 1900 · 3120
           Vỉa hè dưới  ← ◀ LỐI VÀO (mũi tên xanh, x≈3600)
-   ┌──── Hall 5 (trống, không có cửa) ──────┐
+   ┌──── Hall 5 (không có cửa → khối nhà kín có mái) ┐
 ```
 
 - Hai bên là vỉa hè dọc và đường nhựa.
@@ -57,7 +57,7 @@ Ngoài phạm vi hiện tại: multiplayer, dẫn đường tự động, nội 
 
 | Nguồn | Phần tử 3D |
 |---|---|
-| `2` Hall | Sàn tím nhạt có lưới 2 m, kèm tường. **Khử trùng**: bỏ bản trùng hệt và bản lệch nhau hơn 80%. Kết quả còn 5 hall |
+| `2` Hall | Sàn tím nhạt có lưới 2 m, kèm tường. **Khử trùng**: bỏ bản trùng hệt và bản lệch nhau hơn 80%. Kết quả còn 5 hall. Hall **không có cửa nào** (Hall 5, cạnh lối vào) được đánh dấu `sealed` và dựng thành **khối nhà kín có mái**, không có sàn bên trong |
 | `10` small gate | Lỗ cửa trên tường, khung xanh đậm `#38528f` và thảm cửa. Có 16 cửa |
 | `14` Sidewalk | Nền gạch xanh xám, đi được |
 | `15` Road | Đường nhựa có vạch, bị chặn. "Road" nằm **bên trong hall** là **sân khấu** |
@@ -104,13 +104,40 @@ Label có mã được tách thành mã và tên, vd `"L03: Pick Miu Store"` →
 - **Tường hall**:
   - Cao 4 m, dày 0.3 m, có viền trên và chân tường.
   - Lỗ cửa cao 3 m có khung xanh đậm. Trên cửa Check-in có marker hồng nhấp nhô.
+- **Khu nhà kín** (hall không có cửa): mái phẳng dày 0.3 m, nhô ra ngoài tường 6 cm mỗi bên, trên mái có vài khối máy lạnh. Mái cũng được làm mờ khi che nhân vật.
 - **Chữ**: vẽ vào canvas atlas 2048² theo kiểu xếp kệ (shelf packing), 128 px/m. Quad bảng tên của mỗi trang được gộp thành **một mesh** bằng `mergeGeometries`, dùng `MeshBasicMaterial` để chữ không bị đổ bóng.
   - Font: Be Vietnam Pro (Google Fonts), fallback về sans-serif hệ thống. Phải chờ `document.fonts` rồi mới vẽ.
   - Nhãn khu, nhãn phòng và lối vào dùng `Sprite`.
 - **Vật liệu và ánh sáng**:
-  - `MeshToonMaterial` với gradient 3 bậc.
-  - Hemisphere light và directional light. Bóng 2048² chỉ phủ ±32 m quanh nhân vật và đi theo nhân vật.
-  - Bầu trời gradient, sương nhẹ, cỏ pastel ngoài biên.
+  - `MeshToonMaterial` với ramp 4 ô `[0, 0, 190, 255]` theo N·L: mặt quay lưng với nắng không nhận ánh sáng trực tiếp, giống hệt vùng bị bóng đổ, nên mặt khuất và bóng đổ có **cùng một tông** tím nhạt (từ hemisphere light).
+  - Hemisphere light tím nhạt (2.2) làm ánh sáng nền, nắng ấm (1.35) chiếu xiên để bóng đổ dài.
+  - Bóng 2048² phủ ±32 m quanh nhân vật và đi theo nhân vật. Mép bóng mềm nhờ `shadow.radius` (PCF Vogel disk của three r186).
+  - Bầu trời gradient đi theo camera, sương nhẹ, cỏ pastel ngoài biên.
+
+### Chống nhấp nháy (z-fighting, bóng rung)
+
+- **Không có hai khối khác màu chung một mặt phẳng**:
+  - Viền trên tường cao hơn đỉnh tường 3 cm; lanh tô cửa cao hơn viền; mái khu nhà kín cao hơn tất cả. Mỗi lớp ngoài rộng hơn lớp trong vài cm.
+  - Bảng tiêu đề booth đặt trước cột khung 5 mm thay vì trùng mặt cột. Bảng tên pavilion cao hơn đỉnh cột 3 cm.
+- **Chữ trên bảng** cách mặt bảng `SIGN_GAP` = 12 mm và dùng `polygonOffset`, nên không rung kể cả ở góc nhìn toàn cảnh xa.
+- **Mặt phẳng gần** của camera là 0.5 m (trước đây 0.3 m), giúp độ chính xác depth tốt hơn ở xa.
+- **Bóng đổ không rung khi đi**: tâm shadow camera được **bắt vào lưới texel** của shadow map (`snapToShadowTexel`), nên bóng không trượt từng phần nhỏ của texel mỗi frame.
+- Tường chỉ chuyển sang chế độ trong suốt khi đang được làm mờ; lúc đứng yên, tường là vật liệu đục nên thứ tự vẽ ổn định.
+
+### Nhân vật (`src/player/avatar.ts`)
+
+Theo ảnh tham khảo: áo sơ mi trắng cổ đứng có hàng cúc, máy ảnh đeo cổ bằng dây nâu, viền tối kiểu toon.
+
+| | Nam | Nữ |
+|---|---|---|
+| Tóc | Đen, dựng nhọn (các chóp nón), mái lởm chởm | Dài qua vai, mái bằng, hai lọn hai bên, kẹp tóc hồng |
+| Mặt | Kính tròn gọng nâu | Mắt to hơn, tay áo phồng |
+| Thân dưới | Quần ống rộng xanh than, giày đen | Váy dài xoè xanh than (đung đưa khi đi) |
+
+- Cao khoảng 1.65 m. Chân và tay xoay quanh hông và vai khi đi, máy ảnh lắc nhẹ.
+- **Viền tối**: inverted hull, tức một bản sao mặt sau được đẩy ra theo pháp tuyến 11 mm trong vertex shader.
+- Khoảng 90 mảnh được **gộp theo vật liệu** trong từng bộ phận cứng (đầu, thân, tay, chân, máy ảnh), nên chỉ tốn vài chục draw call.
+- Bóng tiếp xúc dưới chân là texture gradient tròn mềm.
 
 ## 7. Hướng mặt quầy (`src/map/facing.ts`)
 
@@ -139,25 +166,41 @@ Kết quả đã kiểm bằng test:
 - Nhân vật là hình tròn bán kính 0.35 m. Mỗi bước di chuyển được chia nhỏ tối đa 0.2 m, rồi đẩy nhân vật ra khỏi box (tối đa 4 lần lặp) nên trượt dọc tường được.
 - Tốc độ đi 4.5 m/s, chạy 9 m/s (Shift, hoặc kéo joystick hết cỡ). Có làm mượt gia tốc và hướng quay.
 - **Bấm lên sàn** thì nhân vật tự đi tới điểm đó. Nếu kẹt quá 0.6 s thì dừng.
+- **Chế độ camera theo hướng đi** (phím F hoặc nút): điều khiển chuyển sang kiểu "lái".
+  - W/S đi tới/lùi theo hướng nhân vật; lùi chậm hơn và vẫn quay mặt về trước.
+  - A/D xoay nhân vật 2.6 rad/s. Trên điện thoại, trục x của joystick là xoay, trục y là đi.
+  - Camera luôn trượt về sau lưng nhân vật, trừ 1.5 s sau khi người dùng tự kéo camera.
 
 ## 9. Camera & giao diện
 
 - **Camera góc thứ 3** (`src/player/camera.ts`):
   - Kéo chuột hoặc vuốt để xoay, cuộn chuột hoặc pinch để zoom (3–32 m).
   - Nếu tường hoặc phòng che giữa camera và nhân vật thì **làm mờ** xuống 0.18 (raycast mỗi frame).
-- **Intro**: camera bay từ trên cao xuống sau lưng nhân vật ở lối vào. Bấm phím bất kỳ để bỏ qua.
+- **Màn bắt đầu**: toàn cảnh xoay chậm, bảng chọn **Nam / Nữ** và nút "Bắt đầu tham quan". Lựa chọn được nhớ trong `localStorage`.
+- **Intro**: sau khi bấm Bắt đầu, camera bay từ toàn cảnh xuống sau lưng nhân vật ở lối vào. Bấm phím bất kỳ để bỏ qua.
 - **Toàn cảnh** (phím M hoặc nút): nhìn xiên toàn map, phía bắc ở trên. Bấm lên sàn để dịch chuyển tới đó.
 - **HUD** (`src/ui/hud.ts`), toàn bộ bằng tiếng Việt:
   - Ô tìm kiếm: so khớp không dấu theo mã, tên hoặc tên stamp rally.
   - Minimap: bấm vào để dịch chuyển.
   - **Thẻ thông tin** khi đứng trước quầy (≤ 2.4 m): mã, tên, loại gian, chip stamp rally. Kèm marker hồng nhấp nhô trên bảng tên.
-  - Hướng dẫn điều khiển. Trên màn hình cảm ứng có joystick ảo.
+  - Nút **Camera theo hướng đi (F)** và **Đổi sang nam/nữ** (đổi nhân vật ngay tại chỗ). Cả hai lựa chọn được nhớ lại.
+  - Hướng dẫn điều khiển, tự đổi theo chế độ camera. Trên màn hình cảm ứng có joystick ảo.
 - **Deep link**: `/#A15` dịch chuyển thẳng tới trước quầy A15. Chọn một gian trong ô tìm kiếm cũng cập nhật hash của URL.
 
-## 10. Hiệu năng
+## 10. Tải trang & hiệu năng
 
-- Khoảng 200 draw call cho toàn bộ map, vì booth instanced và chữ gộp theo trang atlas.
-- Khoảng 170k tam giác, tính cả shadow pass.
+**Tải theo hai giai đoạn** (`src/main.ts` → `src/experience.ts`):
+
+1. **Mở trang**: chỉ tải `index` (app shell + data map, ~47 KB gzip) và `three` (chunk riêng, ~138 KB gzip, cache lâu dài).
+   - Dựng phần **tổng quan**: sàn, tường, mái khu kín, và **khối màu giản lược** cho mọi gian/phòng/sân khấu, tất cả trong 1 draw call (`src/scene/proxies.ts`).
+   - Bảng Bắt đầu có sẵn trong `index.html` nên hiện ngay, trước khi JS chạy. Font tải không chặn hiển thị.
+2. **Bấm Bắt đầu**:
+   - Tải chunk `experience` (~14 KB gzip; tải trước khi rê chuột lên nút).
+   - Dựng chi tiết theo từng bước, mỗi bước nhường một frame và cập nhật thanh tiến độ: font, gian hàng, khu vực, bảng tên, nhân vật, biên dịch shader.
+   - Xong thì thay khối giản lược bằng cảnh chi tiết và bay xuống lối vào.
+
+**Hiệu năng**:
+- Khoảng 250 draw call khi nhìn toàn cảnh cả map, tính cả shadow pass. Booth, viền tường, khung cửa, mái/cửa phòng đều instanced; chữ gộp theo trang atlas; nhân vật gộp theo vật liệu.
 - `pixelRatio ≤ 2`, bóng đổ chỉ phủ vùng quanh nhân vật, sương che phần xa.
 - Không tải asset ngoài ngoài font: nhân vật và props đều dựng từ primitive.
 
@@ -165,6 +208,8 @@ Kết quả đã kiểm bằng test:
 
 ```
 src/
+  main.ts               giai đoạn 1: shell tổng quan, màn bắt đầu, vòng lặp render
+  experience.ts         giai đoạn 2 (chunk riêng): cảnh chi tiết, nhân vật, điều khiển, HUD
   config.ts             tỉ lệ, kích thước, tốc độ, điểm spawn
   data/                 snapshot JSON + kiểu dữ liệu API
   map/                  logic thuần, có unit test (vitest)
@@ -174,21 +219,23 @@ src/
     walls.ts            tường từ viền hall, cắt lỗ cửa
     colliders.ts        AABB + spatial hash + đẩy hình tròn
   scene/                dựng three.js
-    setup.ts            renderer, ánh sáng, bầu trời
-    materials.ts        toon material + cache
+    setup.ts            renderer, ánh sáng, bầu trời, bắt bóng vào lưới texel
+    materials.ts        toon material + ramp + cache
+    instancer.ts        gom transform/màu → một InstancedMesh
+    proxies.ts          khối giản lược cho màn tổng quan
     ground.ts           cỏ, đường, vỉa hè, sàn hall, zone
-    walls.ts            tường, khung cửa (occluder để làm mờ)
+    walls.ts            tường, khung cửa, mái khu nhà kín (occluder để làm mờ)
     booths.ts           booth/stall/pavilion/food court (instanced)
     areas.ts            phòng, billboard, cột, sân khấu, check-in, lối vào, nhãn
     signAtlas.ts        atlas chữ cho bảng tên
-  player/               avatar chibi, điều khiển, camera
-  ui/                   HUD + CSS
+  player/               nhân vật nam/nữ, điều khiển (thường + theo hướng đi), camera
+  ui/                   màn bắt đầu, HUD, lưu lựa chọn (prefs), CSS
 ```
 
 ## 12. Hướng mở rộng
 
 - **Dẫn đường**: dùng A* trên lưới 0.5 m sinh từ collider, vẽ đường chỉ dẫn trên sàn tới booth được tìm.
 - **Lọc stamp rally**: làm nổi bật các booth trong cùng một group, đánh dấu trên minimap.
-- **Avatar GLB** có animation (Mixamo) và cho người dùng chọn trang phục.
+- **Avatar GLB** có animation (Mixamo) và thêm tuỳ chọn trang phục.
 - **Multiplayer** qua WebSocket để thấy người tham quan khác.
 - Hiển thị ảnh hoặc link gian (`linkUrl`, `iconUrl`) khi API có dữ liệu.

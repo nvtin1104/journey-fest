@@ -119,7 +119,7 @@ html, body {
   box-shadow: var(--shadow);
   cursor: crosshair;
 }
-.buttons { display: flex; gap: 6px; }
+.buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 24px); }
 .buttons button {
   padding: 8px 12px;
   border: 0;
@@ -215,27 +215,86 @@ html, body {
   .hud-top { width: calc(100vw - 190px); }
 }
 
-#loading {
+/* Start screen: sits over the spinning overview until the detailed scene is ready. */
+.start {
   position: fixed;
   inset: 0;
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  background: linear-gradient(160deg, #fdf1ff, #dcefff);
+  padding: 16px 16px max(28px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(243, 236, 255, 0) 40%, rgba(243, 236, 255, 0.85));
+  z-index: 10;
+  transition: opacity 0.5s;
+}
+.start.hide { opacity: 0; pointer-events: none; }
+.start-card {
+  width: min(420px, 100%);
+  padding: 20px 20px 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+  text-align: center;
+}
+.start-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--muted);
-  transition: opacity 0.5s;
-  z-index: 10;
 }
-#loading.hide { opacity: 0; pointer-events: none; }
-.spinner {
-  width: 42px;
-  height: 42px;
+.start-brand .dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  border: 5px solid #e4d8ff;
-  border-top-color: var(--accent);
-  animation: spin 0.9s linear infinite;
+  background: conic-gradient(#ff8fd1, #ffe666, #9ed7ff, #b58cff, #ff8fd1);
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+.start h1 { margin: 6px 0 4px; font-size: 24px; font-weight: 800; }
+.start p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.gender { display: flex; gap: 10px; justify-content: center; margin-bottom: 14px; }
+.gender button {
+  flex: 1;
+  max-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 8px;
+  border: 3px solid transparent;
+  border-radius: 16px;
+  background: #f4eeff;
+  font: inherit;
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+}
+.gender button svg { width: 64px; height: 64px; }
+.gender button[aria-pressed='true'] { border-color: var(--accent); background: #fff0f7; }
+.gender button:disabled { cursor: default; }
+#start-btn {
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  box-shadow: 0 6px 16px rgba(255, 79, 154, 0.35);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+}
+#start-btn:disabled { background: #c9b8e8; box-shadow: none; cursor: default; }
+.start.error #start-btn { background: #e25b5b; }
+.progress {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: #eee6ff;
+  overflow: hidden;
+  visibility: hidden;
+}
+.start.loading .progress { visibility: visible; }
+.progress > div { width: 0; height: 100%; background: var(--accent); transition: width 0.25s; }

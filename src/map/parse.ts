@@ -44,7 +44,8 @@ export interface Highlight { id: string; rect: Rect; color: string }
 export interface Prop { kind: 'table' | 'checkin-desk'; rect: Rect; facing: Facing }
 
 export interface ParsedMap {
-  halls: Array<Rect & { id: string }>;
+  /** `sealed` halls have no door on any edge: they are drawn as closed, roofed buildings. */
+  halls: Array<Rect & { id: string; sealed: boolean }>;
   gates: GateRect[];
   walls: WallSegment[];
   doors: Door[];
@@ -202,6 +203,11 @@ export function parseMap(data: EventMapData): ParsedMap {
   }
 
   const { walls, doors } = buildWalls(halls, gates);
+  const onEdge = (h: Rect, d: Door) =>
+    d.axis === 'h'
+      ? (d.at === h.y || d.at === h.y + h.h) && d.from >= h.x && d.to <= h.x + h.w
+      : (d.at === h.x || d.at === h.x + h.w) && d.from >= h.y && d.to <= h.y + h.h;
+  const hallsOut = halls.map((h) => ({ ...h, sealed: !doors.some((d) => onEdge(h, d)) }));
 
   const props: Prop[] = [];
   for (const s of standsRaw) if (s.kind === 'foodcourt') props.push(...foodCourtTables(s.rect));
@@ -239,7 +245,7 @@ export function parseMap(data: EventMapData): ParsedMap {
   const bounds = unionRect(all);
 
   return {
-    halls, gates, walls, doors, stands, rooms, billboards, columns, grounds, zones, stages, highlights, signParts, props,
+    halls: hallsOut, gates, walls, doors, stands, rooms, billboards, columns, grounds, zones, stages, highlights, signParts, props,
     groups: [...data.groups].sort((a, b) => a.sortOrder - b.sortOrder),
     bounds,
   };

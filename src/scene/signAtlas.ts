@@ -8,6 +8,9 @@ const PAD = 2;
 
 export const FONT = '"Be Vietnam Pro", "Segoe UI", system-ui, sans-serif';
 
+/** Distance (m) between a sign plane and the board behind it. Together with polygonOffset this keeps signs from flickering, even in the far overview. */
+export const SIGN_GAP = 0.012;
+
 export interface SignStyle {
   code: string;
   name: string;
@@ -197,7 +200,15 @@ export class SignAtlas {
         p.texture.needsUpdate = true;
         const merged = mergeGeometries(p.geometries)!;
         p.geometries.forEach((g) => g.dispose());
-        const mat = new THREE.MeshBasicMaterial({ map: p.texture, toneMapped: false, transparent: true, alphaTest: 0.1 });
+        const mat = new THREE.MeshBasicMaterial({
+          map: p.texture,
+          toneMapped: false,
+          transparent: true,
+          alphaTest: 0.1,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        });
         const mesh = new THREE.Mesh(merged, mat);
         mesh.name = 'signs';
         return mesh;

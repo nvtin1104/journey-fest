@@ -3,37 +3,11 @@ import { BOOTH, PAVILION, SCALE } from '../config';
 import { facingAngle, overlapArea, worldRect } from '../map/coords';
 import type { ParsedMap, Stand } from '../map/parse';
 import { toonUnique, tint, unitBox } from './materials';
-import type { SignAtlas } from './signAtlas';
+import { Instancer } from './instancer';
+import { SIGN_GAP, type SignAtlas } from './signAtlas';
 
 const FRAME_COLOR = '#b8b2d6';
 const MERCH_COLORS = ['#ffb3c7', '#ffd88a', '#a8e6cf', '#9ed7ff', '#d3b5ff', '#ffc3a0', '#fff1a8', '#b5f0ff'];
-
-/** Collects instance transforms/colours, then emits one InstancedMesh. */
-export class Instancer {
-  private matrices: THREE.Matrix4[] = [];
-  private colors: THREE.Color[] = [];
-
-  push(m: THREE.Matrix4, color: THREE.ColorRepresentation = '#ffffff') {
-    this.matrices.push(m.clone());
-    this.colors.push(new THREE.Color(color));
-  }
-
-  build(geometry: THREE.BufferGeometry, material: THREE.Material, name: string, shadows = true) {
-    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, this.matrices.length));
-    mesh.name = name;
-    mesh.count = this.matrices.length;
-    this.matrices.forEach((m, i) => {
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, this.colors[i]);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    mesh.castShadow = shadows;
-    mesh.receiveShadow = true;
-    mesh.computeBoundingSphere();
-    return mesh;
-  }
-}
 
 function hashSeed(s: string) {
   let h = 2166136261;
@@ -117,9 +91,10 @@ function buildBooth(parts: Parts, atlas: SignAtlas, s: Stand) {
 
   const fh = BOOTH.fasciaHeight;
   const fy = ph - fh / 2 + 0.02;
-  const fz = D / 2 - p;
+  // The board sits just in front of the posts so no faces are shared (shared faces flicker).
+  const fz = D / 2 + 0.005;
   parts.body.push(partMatrix(base, W + 0.04, fh + 0.04, 0.06, 0, fy, fz), s.color);
-  atlas.add({ code: s.code, name: s.name, color: s.color }, W - 0.04, fh - 0.04, signMatrix(base, 0, fy, fz + 0.032));
+  atlas.add({ code: s.code, name: s.name, color: s.color }, W - 0.04, fh - 0.04, signMatrix(base, 0, fy, fz + 0.03 + SIGN_GAP));
 
   merchOnCounter(parts, base, s, W, counterZ, counterDepth, h + 0.01);
 }
@@ -139,7 +114,8 @@ function buildPavilion(parts: Parts, atlas: SignAtlas, s: Stand, accent: string)
   }
 
   // Header ring and signs on all four sides.
-  const hy = ph - hh / 2;
+  // Header boards reach slightly above the posts so their tops never coincide.
+  const hy = ph - hh / 2 + 0.03;
   const style = { code: s.code, name: s.name, color: accent };
   const sides: Array<{ len: number; x: number; z: number; rot: number; alongX: boolean }> = [
     { len: W, x: 0, z: D / 2, rot: 0, alongX: true },
@@ -150,8 +126,8 @@ function buildPavilion(parts: Parts, atlas: SignAtlas, s: Stand, accent: string)
   for (const side of sides) {
     const [w, d] = side.alongX ? [side.len, 0.1] : [0.1, side.len];
     parts.body.push(partMatrix(base, w, hh, d, side.x, hy, side.z), accent);
-    const nx = side.alongX ? 0 : Math.sign(side.x) * 0.052;
-    const nz = side.alongX ? Math.sign(side.z) * 0.052 : 0;
+    const nx = side.alongX ? 0 : Math.sign(side.x) * (0.05 + SIGN_GAP);
+    const nz = side.alongX ? Math.sign(side.z) * (0.05 + SIGN_GAP) : 0;
     atlas.add(style, side.len - 0.2, hh - 0.08, signMatrix(base, side.x + nx, hy, side.z + nz, side.rot));
   }
 

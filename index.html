@@ -8,12 +8,45 @@
     <title>Color Fiesta · Bản đồ 3D</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800&display=swap" rel="stylesheet" />
+    <!-- Non-blocking font: the start screen paints with the system font and swaps when ready. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800&display=swap" media="print" onload="this.media='all'" />
   </head>
   <body>
     <div id="app"></div>
     <div id="hud"></div>
-    <div id="loading"><div class="spinner"></div>Đang dựng bản đồ…</div>
+    <div id="start" class="start">
+      <div class="start-card">
+        <div class="start-brand"><span class="dot"></span>Color Fiesta · Bản đồ 3D</div>
+        <h1>Tham quan hội chợ</h1>
+        <p>Chọn nhân vật, rồi bắt đầu từ lối vào khu Check-in.</p>
+        <div class="gender" role="group" aria-label="Chọn nhân vật">
+          <button type="button" data-gender="male" aria-pressed="true">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M12 60c2-12 9-18 20-18s18 6 20 18z" fill="#f4f0e6" stroke="#241f33" stroke-width="2.5" />
+              <circle cx="32" cy="26" r="14" fill="#ffe1cf" stroke="#241f33" stroke-width="2.5" />
+              <path d="M17 24l2-9 5 3 3-8 5 6 5-7 3 8 5-3 2 10-6-4-5 4-4-5-4 5-5-4z" fill="#1f1d29" stroke="#241f33" stroke-width="2" stroke-linejoin="round" />
+              <circle cx="26" cy="28" r="4.2" fill="none" stroke="#6b4f3a" stroke-width="1.8" />
+              <circle cx="38" cy="28" r="4.2" fill="none" stroke="#6b4f3a" stroke-width="1.8" />
+              <rect x="25" y="50" width="12" height="7" rx="1.5" fill="#1d1c24" />
+            </svg>
+            <span>Nam</span>
+          </button>
+          <button type="button" data-gender="female" aria-pressed="false">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M16 46c-2-18 0-32 16-32s18 14 16 32z" fill="#2b2231" stroke="#241f33" stroke-width="2.5" />
+              <path d="M12 60c2-12 9-18 20-18s18 6 20 18z" fill="#f4f0e6" stroke="#241f33" stroke-width="2.5" />
+              <circle cx="32" cy="27" r="13.5" fill="#ffe1cf" stroke="#241f33" stroke-width="2.5" />
+              <path d="M18 26c0-10 6-15 14-15s14 5 14 15c-6-2-9-6-10-9-3 5-10 8-18 9z" fill="#2b2231" />
+              <circle cx="42" cy="16" r="3" fill="#ff8fb8" />
+              <rect x="25" y="50" width="12" height="7" rx="1.5" fill="#1d1c24" />
+            </svg>
+            <span>Nữ</span>
+          </button>
+        </div>
+        <button id="start-btn" type="button" disabled>Đang tải bản đồ…</button>
+        <div class="progress"><div></div></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

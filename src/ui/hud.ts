@@ -8,6 +8,8 @@ export interface HudCallbacks {
   onMinimapClick: (mapX: number, mapY: number) => void;
   onToggleOverview: () => void;
   onGoEntrance: () => void;
+  onToggleFocus: () => void;
+  onSwitchCharacter: () => void;
   onJoystick: (x: number, y: number) => void;
 }
 
@@ -65,6 +67,9 @@ export class Hud {
   private minimapBase: HTMLCanvasElement;
   private mmScale = 1;
   private overviewBtn: HTMLButtonElement;
+  private focusBtn: HTMLButtonElement;
+  private characterBtn: HTMLButtonElement;
+  private help: HTMLElement;
 
   constructor(root: HTMLElement, private map: ParsedMap, private cb: HudCallbacks) {
     // Brand + search.
@@ -118,7 +123,12 @@ export class Hud {
     this.overviewBtn.addEventListener('click', () => this.cb.onToggleOverview());
     const entrance = el('button', undefined, 'Về lối vào');
     entrance.addEventListener('click', () => this.cb.onGoEntrance());
-    buttons.append(this.overviewBtn, entrance);
+    this.focusBtn = el('button', undefined, 'Camera theo hướng đi (F)');
+    this.focusBtn.title = 'Camera luôn nhìn theo hướng nhân vật đi. A/D để xoay, W/S để đi.';
+    this.focusBtn.addEventListener('click', () => this.cb.onToggleFocus());
+    this.characterBtn = el('button', undefined, 'Đổi nhân vật');
+    this.characterBtn.addEventListener('click', () => this.cb.onSwitchCharacter());
+    buttons.append(this.overviewBtn, entrance, this.focusBtn, this.characterBtn);
     side.append(this.minimap, buttons);
     this.minimap.addEventListener('click', (e) => {
       const r = this.minimap.getBoundingClientRect();
@@ -131,12 +141,26 @@ export class Hud {
     this.card = el('div', 'card');
 
     // Controls help.
-    const help = el('div', 'help');
-    help.innerHTML =
-      '<b>Điều khiển</b><br>WASD / ← ↑ → ↓: đi · Shift: chạy<br>Kéo chuột: xoay · Cuộn: zoom<br>Bấm lên sàn: đi tới đó · M: toàn cảnh';
+    this.help = el('div', 'help');
+    this.renderHelp(false);
 
-    root.append(top, side, this.card, help, this.buildJoystick());
+    root.append(top, side, this.card, this.help, this.buildJoystick());
     this.drawMinimapBase();
+  }
+
+  private renderHelp(focus: boolean) {
+    const move = focus ? 'W / S: đi tới, lùi · A / D: xoay' : 'WASD / ← ↑ → ↓: đi';
+    this.help.innerHTML =
+      `<b>Điều khiển</b><br>${move} · Shift: chạy<br>Kéo chuột: xoay · Cuộn: zoom<br>Bấm lên sàn: đi tới đó · M: toàn cảnh · F: camera theo hướng đi`;
+  }
+
+  setFocus(on: boolean) {
+    this.focusBtn.classList.toggle('active', on);
+    this.renderHelp(on);
+  }
+
+  setGender(gender: 'male' | 'female') {
+    this.characterBtn.textContent = gender === 'male' ? 'Đổi sang nữ' : 'Đổi sang nam';
   }
 
   setOverview(on: boolean) {
@@ -233,7 +257,7 @@ export class Hud {
     ctx.fillStyle = '#d4ecc9';
     ctx.fillRect(0, 0, w, h);
     for (const g of this.map.grounds) R(g.rect, g.kind === 'road' ? '#8b8b96' : '#b9c9bd');
-    for (const hall of this.map.halls) R(hall, '#f7f1fe');
+    for (const hall of this.map.halls) R(hall, hall.sealed ? '#d9cfee' : '#f7f1fe');
     for (const z of this.map.zones) R(z.rect, z.color);
     for (const r of this.map.rooms) R(r.rect, r.color);
     for (const s of this.map.stands) R(s.rect, s.kind === 'foodcourt' ? '#fff2a8' : s.color);

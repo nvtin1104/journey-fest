@@ -108,7 +108,7 @@ export function buildGround(map: ParsedMap): THREE.Group {
     ctx.strokeRect(0, 0, s, s);
   });
   const hallMat = floorMaterial('#f7f1fe', gridTex, 2);
-  for (const h of map.halls) group.add(plane(h, LAYER.hall, hallMat, 2));
+  for (const h of map.halls) if (!h.sealed) group.add(plane(h, LAYER.hall, hallMat, 2));
 
   for (const z of map.zones) group.add(plane(z.rect, LAYER.zone, floorMaterial(z.color, null, 3)));
   for (const h of map.highlights) group.add(plane(h.rect, LAYER.highlight, floorMaterial(tint(h.color, 0.35), null, 4)));
