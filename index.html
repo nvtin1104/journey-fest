@@ -45,6 +45,14 @@
         </div>
         <button id="start-btn" type="button" disabled>Đang tải bản đồ…</button>
         <div class="progress"><div></div></div>
+        <p class="start-error" role="alert" hidden></p>
+      </div>
+    </div>
+    <div id="notice" class="notice" role="alert" hidden>
+      <div class="notice-card">
+        <b>Đồ hoạ tạm dừng</b>
+        <p>Trình duyệt vừa tạm ngắt đồ hoạ 3D (thường do máy thiếu bộ nhớ). Hãy tải lại trang để tiếp tục.</p>
+        <button type="button" onclick="location.reload()">Tải lại</button>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

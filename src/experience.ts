@@ -13,6 +13,7 @@ import type { FollowCamera } from './player/camera';
 import { PlayerController } from './player/controller';
 import { buildAreas } from './scene/areas';
 import { buildStands, standSize } from './scene/booths';
+import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
 import { FONT, SignAtlas } from './scene/signAtlas';
 import { Hud, normalize } from './ui/hud';
@@ -28,6 +29,7 @@ export interface ExperienceOptions {
   proxies: THREE.Object3D;
   hudRoot: HTMLElement;
   gender: Gender;
+  quality: QualityManager;
   onProgress: (fraction: number, label: string) => void;
 }
 
@@ -66,7 +68,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   o.onProgress(0.2, 'Đang dựng gian hàng…');
   await nextFrame();
   const world = buildColliders(map);
-  const atlas = new SignAtlas();
+  const atlas = new SignAtlas(QUALITY[o.quality.level].signPxPerMeter);
   detail.add(buildStands(map, atlas));
 
   o.onProgress(0.5, 'Đang dựng khu vực…');
@@ -129,18 +131,26 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     savePref('focus', on ? '1' : '0');
   };
   let gender = o.gender;
-  const switchCharacter = () => {
-    gender = gender === 'male' ? 'female' : 'male';
+  const selectCharacter = (g: Gender) => {
+    if (g === gender) return;
+    gender = g;
     player.setAvatar(createAvatar(gender));
     hud.setGender(gender);
+  hud.setQuality(o.quality.mode, o.quality.level);
+  o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
     savePref('gender', gender);
   };
+  const switchCharacter = () => selectCharacter(gender === 'male' ? 'female' : 'male');
 
   const hud = new Hud(o.hudRoot, map, {
     onSelectStand: goToStand,
     onToggleOverview: toggleOverview,
     onToggleFocus: () => setFocus(!player.focus),
-    onSwitchCharacter: switchCharacter,
+    onSelectCharacter: selectCharacter,
+    onSelectQuality: (mode) => {
+      o.quality.setMode(mode);
+      savePref('quality', mode);
+    },
     onGoEntrance: () => {
       player.teleport(spawn.x, spawn.z, spawn.heading);
       leaveOverview();
@@ -156,6 +166,8 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     },
   });
   hud.setGender(gender);
+  hud.setQuality(o.quality.mode, o.quality.level);
+  o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
   setFocus(loadPref('focus') === '1');
 
   // Tap on the floor: walk there (or jump there from the overview).

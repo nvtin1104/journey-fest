@@ -133,6 +133,31 @@ html, body {
   cursor: pointer;
 }
 .buttons button:hover { background: #fff; }
+.buttons button.icon { padding: 8px 11px; font-size: 15px; line-height: 1; }
+.settings {
+  width: 250px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.settings[hidden] { display: none; }
+.settings-row { margin-bottom: 10px; }
+.seg { display: flex; gap: 4px; margin-top: 4px; }
+.seg button {
+  flex: 1;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1ebff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.seg button.active { background: var(--accent); color: #fff; }
 .buttons button.active { background: var(--accent); color: #fff; }
 
 .card {
@@ -156,6 +181,8 @@ html, body {
 .groups { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .groups .card-sub { width: 100%; }
 .tag {
+  /* color-mix needs Safari 16.2+; older browsers keep the plain white chip with the coloured border. */
+  background: #ffffff;
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 12px;
@@ -207,6 +234,7 @@ html, body {
   .joystick { display: block; }
   .help { display: none; }
   .card { bottom: 170px; }
+  .buttons button { padding: 7px 10px; font-size: 12px; }
 }
 
 @media (max-width: 640px) {
@@ -234,6 +262,7 @@ html, body {
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   text-align: center;
 }
@@ -298,3 +327,36 @@ html, body {
 }
 .start.loading .progress { visibility: visible; }
 .progress > div { width: 0; height: 100%; background: var(--accent); transition: width 0.25s; }
+.start-error { margin: 12px 0 0; color: #b33b3b; font-size: 13px; line-height: 1.5; }
+
+.notice {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(243, 236, 255, 0.85);
+  z-index: 20;
+}
+.notice[hidden] { display: none; }
+.notice-card {
+  width: min(360px, 100%);
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.notice-card p { color: var(--muted); font-size: 14px; }
+.notice-card button {
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  font: inherit;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+}
+button { touch-action: manipulation; }

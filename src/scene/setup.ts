@@ -13,9 +13,20 @@ const SKY_TOP = new THREE.Color('#9fd3ff');
 const SKY_BOTTOM = new THREE.Color('#fdf1ff');
 export const FOG_COLOR = new THREE.Color('#f3ecff');
 
-export function createScene(container: HTMLElement): SceneContext {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+/** True when the browser can create a WebGL2 context (required by three.js since r163). */
+export function hasWebGL2(): boolean {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
+  } catch {
+    return false;
+  }
+}
+
+/** Pixel ratio and shadow settings are applied afterwards by QualityManager. */
+export function createScene(container: HTMLElement, opts: { antialias: boolean }): SceneContext {
+  const renderer = new THREE.WebGLRenderer({ antialias: opts.antialias, powerPreference: 'high-performance' });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;

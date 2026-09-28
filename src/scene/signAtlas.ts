@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const PAGE = 2048;
 /** Canvas pixels per metre of sign. */
+/** Default canvas pixels per metre of sign; low quality passes a smaller value to save GPU memory. */
 const PX_PER_M = 128;
 const MAX_W = 1024;
 const PAD = 2;
@@ -63,9 +64,27 @@ function wrap2(ctx: CanvasRenderingContext2D, text: string, width: number): stri
   return [ellipsize(ctx, line, width)];
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+type PathContext = Pick<CanvasRenderingContext2D, 'beginPath' | 'moveTo' | 'arcTo' | 'closePath'> & {
+  roundRect?: CanvasRenderingContext2D['roundRect'];
+};
+
+/**
+ * Rounded-rectangle path. `ctx.roundRect` only exists since Safari 16 / Chrome 99 / Firefox 112,
+ * so older browsers (e.g. iPhones on iOS 15) get the same shape built from `arcTo`.
+ */
+export function roundRect(ctx: PathContext, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }
 
 /** Readable text colour on top of `bg`. */
@@ -133,6 +152,8 @@ function drawSign(ctx: CanvasRenderingContext2D, w: number, h: number, s: SignSt
 export class SignAtlas {
   private pages: Page[] = [];
 
+  constructor(private pxPerMeter = PX_PER_M) {}
+
   private newPage(): Page {
     const canvas = document.createElement('canvas');
     canvas.width = PAGE;
@@ -167,8 +188,8 @@ export class SignAtlas {
    * Adds a sign of `width` × `height` metres. `matrix` places a plane facing local +Z.
    */
   add(style: SignStyle, width: number, height: number, matrix: THREE.Matrix4) {
-    let pw = Math.round(width * PX_PER_M);
-    let ph = Math.round(height * PX_PER_M);
+    let pw = Math.round(width * this.pxPerMeter);
+    let ph = Math.round(height * this.pxPerMeter);
     if (pw > MAX_W) {
       ph = Math.round((ph * MAX_W) / pw);
       pw = MAX_W;

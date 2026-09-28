@@ -1,4 +1,6 @@
 import { toMapX, toMapY, type Rect } from '../map/coords';
+import type { Gender } from '../player/avatar';
+import { QUALITY, type QualityLevel, type QualityMode } from '../scene/quality';
 import type { ParsedMap, Stand } from '../map/parse';
 import { wallRect } from '../map/walls';
 import { WALL_T } from '../map/parse';
@@ -9,7 +11,8 @@ export interface HudCallbacks {
   onToggleOverview: () => void;
   onGoEntrance: () => void;
   onToggleFocus: () => void;
-  onSwitchCharacter: () => void;
+  onSelectCharacter: (gender: Gender) => void;
+  onSelectQuality: (mode: QualityMode) => void;
   onJoystick: (x: number, y: number) => void;
 }
 
@@ -68,7 +71,12 @@ export class Hud {
   private mmScale = 1;
   private overviewBtn: HTMLButtonElement;
   private focusBtn: HTMLButtonElement;
-  private characterBtn: HTMLButtonElement;
+  private settings: HTMLElement;
+  private genderBtns = new Map<Gender, HTMLButtonElement>();
+  private qualityBtns = new Map<QualityMode, HTMLButtonElement>();
+  private qualityNote: HTMLElement;
+  /** Touch screens get short labels without keyboard hints. */
+  private touch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
   private help: HTMLElement;
 
   constructor(root: HTMLElement, private map: ParsedMap, private cb: HudCallbacks) {
@@ -119,17 +127,51 @@ export class Hud {
     this.minimap.title = 'Bấm để dịch chuyển tới điểm này';
     this.minimapBase = document.createElement('canvas');
     const buttons = el('div', 'buttons');
-    this.overviewBtn = el('button', undefined, 'Toàn cảnh (M)');
+    this.overviewBtn = el('button', undefined, this.label('Toàn cảnh', 'M'));
     this.overviewBtn.addEventListener('click', () => this.cb.onToggleOverview());
-    const entrance = el('button', undefined, 'Về lối vào');
+    const entrance = el('button', undefined, 'Lối vào');
+    entrance.title = 'Về lối vào khu Check-in';
     entrance.addEventListener('click', () => this.cb.onGoEntrance());
-    this.focusBtn = el('button', undefined, 'Camera theo hướng đi (F)');
-    this.focusBtn.title = 'Camera luôn nhìn theo hướng nhân vật đi. A/D để xoay, W/S để đi.';
+    this.focusBtn = el('button', undefined, this.label('Theo hướng đi', 'F'));
+    this.focusBtn.title = 'Camera luôn nhìn theo hướng nhân vật đi';
     this.focusBtn.addEventListener('click', () => this.cb.onToggleFocus());
-    this.characterBtn = el('button', undefined, 'Đổi nhân vật');
-    this.characterBtn.addEventListener('click', () => this.cb.onSwitchCharacter());
-    buttons.append(this.overviewBtn, entrance, this.focusBtn, this.characterBtn);
-    side.append(this.minimap, buttons);
+    const gear = el('button', 'icon', '⚙');
+    gear.title = 'Cài đặt: nhân vật, chất lượng đồ hoạ';
+    gear.setAttribute('aria-label', 'Cài đặt');
+    buttons.append(this.overviewBtn, entrance, this.focusBtn, gear);
+
+    // Settings popover: character and graphics quality.
+    this.settings = el('div', 'settings');
+    this.settings.hidden = true;
+    const row = (title: string) => {
+      const r = el('div', 'settings-row');
+      r.append(el('div', 'card-sub', title));
+      const group = el('div', 'seg');
+      r.append(group);
+      this.settings.append(r);
+      return group;
+    };
+    const genders = row('Nhân vật');
+    for (const [g, text] of [['male', 'Nam'], ['female', 'Nữ']] as const) {
+      const b = el('button', undefined, text);
+      b.addEventListener('click', () => this.cb.onSelectCharacter(g));
+      this.genderBtns.set(g, b);
+      genders.append(b);
+    }
+    const qualities = row('Chất lượng đồ hoạ');
+    for (const m of ['auto', 'high', 'medium', 'low'] as const) {
+      const b = el('button', undefined, m === 'auto' ? 'Tự động' : QUALITY[m].label);
+      b.addEventListener('click', () => this.cb.onSelectQuality(m));
+      this.qualityBtns.set(m, b);
+      qualities.append(b);
+    }
+    this.qualityNote = el('div', 'card-sub');
+    this.settings.append(this.qualityNote);
+    gear.addEventListener('click', () => {
+      this.settings.hidden = !this.settings.hidden;
+      gear.classList.toggle('active', !this.settings.hidden);
+    });
+    side.append(this.minimap, buttons, this.settings);
     this.minimap.addEventListener('click', (e) => {
       const r = this.minimap.getBoundingClientRect();
       const px = ((e.clientX - r.left) / r.width) * this.minimap.width;
@@ -159,13 +201,24 @@ export class Hud {
     this.renderHelp(on);
   }
 
-  setGender(gender: 'male' | 'female') {
-    this.characterBtn.textContent = gender === 'male' ? 'Đổi sang nữ' : 'Đổi sang nam';
+  /** Button text, with the keyboard shortcut only on devices that have a keyboard. */
+  private label(text: string, key: string) {
+    return this.touch ? text : `${text} (${key})`;
+  }
+
+  setGender(gender: Gender) {
+    for (const [g, b] of this.genderBtns) b.classList.toggle('active', g === gender);
+  }
+
+  setQuality(mode: QualityMode, level: QualityLevel) {
+    for (const [m, b] of this.qualityBtns) b.classList.toggle('active', m === mode);
+    this.qualityNote.textContent =
+      mode === 'auto' ? `Đang dùng: ${QUALITY[level].label} (tự hạ khi máy chạy chậm)` : 'Mức cố định, không tự điều chỉnh';
   }
 
   setOverview(on: boolean) {
     this.overviewBtn.classList.toggle('active', on);
-    this.overviewBtn.textContent = on ? 'Quay lại (M)' : 'Toàn cảnh (M)';
+    this.overviewBtn.textContent = on ? this.label('Quay lại', 'M') : this.label('Toàn cảnh', 'M');
   }
 
   showStand(s: Stand | null) {

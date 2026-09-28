@@ -1,7 +1,18 @@
 import * as THREE from 'three';
 
 const FOLLOW = { distance: 9, pitch: 0.5, minDist: 3, maxDist: 32 };
-const OVERVIEW = { distance: 175, pitch: 1.08, minDist: 60, maxDist: 280 };
+const OVERVIEW = { distance: 175, pitch: 1.08, minDist: 60, maxDist: 480 };
+
+/**
+ * Camera distance that fits a circle of `radius` metres inside the view, whatever the screen shape
+ * (portrait phones have a much narrower horizontal field of view).
+ */
+export function fitDistance(radius: number, fovDeg: number, aspect: number, min: number, max: number) {
+  const vfov = THREE.MathUtils.degToRad(fovDeg);
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
+  const half = Math.min(vfov, hfov) / 2;
+  return THREE.MathUtils.clamp(radius / Math.tan(half), min, max);
+}
 const HEAD_HEIGHT = 1.4;
 
 const lerpAngle = (a: number, b: number, t: number) => {
@@ -46,6 +57,8 @@ export class FollowCamera {
     private dom: HTMLElement,
     private occluders: THREE.Mesh[],
     private overviewCenter: THREE.Vector3,
+    /** Half the venue's size (m): the overview keeps it all on screen. */
+    private overviewRadius = 100,
   ) {
     dom.addEventListener('pointerdown', this.onDown);
     dom.addEventListener('pointermove', this.onMove);
@@ -59,7 +72,7 @@ export class FollowCamera {
   startShowcase() {
     this.mode = 'overview';
     this.showcase = true;
-    this.targetDistance = this.distance = OVERVIEW.distance;
+    this.targetDistance = this.distance = this.overviewDistance();
     this.targetPitch = this.pitch = OVERVIEW.pitch;
     this.target.copy(this.overviewCenter);
   }
@@ -90,7 +103,7 @@ export class FollowCamera {
       this.mode = 'overview';
       // North up, like the minimap.
       this.targetYaw = Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2;
-      this.targetDistance = OVERVIEW.distance;
+      this.targetDistance = this.overviewDistance();
       this.targetPitch = OVERVIEW.pitch;
     } else {
       this.mode = 'follow';
@@ -99,6 +112,15 @@ export class FollowCamera {
       this.targetPitch = FOLLOW.pitch;
     }
     this.rate = 3;
+  }
+
+  private overviewDistance() {
+    return fitDistance(this.overviewRadius, this.camera.fov, this.camera.aspect, OVERVIEW.distance, OVERVIEW.maxDist);
+  }
+
+  /** Re-frame the overview after the screen was resized or rotated. */
+  refit() {
+    if (this.mode === 'overview') this.targetDistance = this.overviewDistance();
   }
 
   private onDown = (e: PointerEvent) => {

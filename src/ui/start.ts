@@ -6,7 +6,8 @@ export interface StartScreen {
   ready: () => void;
   progress: (fraction: number, label: string) => void;
   hide: () => void;
-  fail: (message: string) => void;
+  /** Shows why the map can't open; `detail` explains what the visitor can do. */
+  fail: (message: string, detail?: string) => void;
 }
 
 /**
@@ -53,9 +54,15 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
       button.textContent = `${label} ${Math.round(fraction * 100)}%`;
     },
     hide: () => panel.classList.add('hide'),
-    fail: (message) => {
+    fail: (message, detail) => {
+      button.disabled = true;
       button.textContent = message;
       panel.classList.add('error');
+      const note = panel.querySelector<HTMLElement>('.start-error');
+      if (note && detail) {
+        note.textContent = detail;
+        note.hidden = false;
+      }
     },
   };
 }

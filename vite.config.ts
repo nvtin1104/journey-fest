@@ -6,7 +6,8 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    target: 'es2022',
+    // WebGL2 (required by three.js) starts at Safari 15; transpile anything newer than these browsers.
+    target: ['es2021', 'safari15', 'chrome100', 'edge100', 'firefox100'],
     chunkSizeWarningLimit: 1500,
     rolldownOptions: {
       output: {

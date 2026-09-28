@@ -179,12 +179,23 @@ Kết quả đã kiểm bằng test:
 - **Màn bắt đầu**: toàn cảnh xoay chậm, bảng chọn **Nam / Nữ** và nút "Bắt đầu tham quan". Lựa chọn được nhớ trong `localStorage`.
 - **Intro**: sau khi bấm Bắt đầu, camera bay từ toàn cảnh xuống sau lưng nhân vật ở lối vào. Bấm phím bất kỳ để bỏ qua.
 - **Toàn cảnh** (phím M hoặc nút): nhìn xiên toàn map, phía bắc ở trên. Bấm lên sàn để dịch chuyển tới đó.
+  - Khoảng cách camera được tính theo tỉ lệ khung hình (`fitDistance`), nên cả map luôn vừa màn hình, kể cả điện thoại dọc.
+  - Sương mù lùi ra xa theo khoảng cách camera để map không bị che.
 - **HUD** (`src/ui/hud.ts`), toàn bộ bằng tiếng Việt:
   - Ô tìm kiếm: so khớp không dấu theo mã, tên hoặc tên stamp rally.
   - Minimap: bấm vào để dịch chuyển.
   - **Thẻ thông tin** khi đứng trước quầy (≤ 2.4 m): mã, tên, loại gian, chip stamp rally. Kèm marker hồng nhấp nhô trên bảng tên.
-  - Nút **Camera theo hướng đi (F)** và **Đổi sang nam/nữ** (đổi nhân vật ngay tại chỗ). Cả hai lựa chọn được nhớ lại.
-  - Hướng dẫn điều khiển, tự đổi theo chế độ camera. Trên màn hình cảm ứng có joystick ảo.
+  - Nút **Toàn cảnh**, **Lối vào**, **Camera theo hướng đi (F)** và **⚙ Cài đặt**.
+  - Menu ⚙ gồm hai nhóm:
+    - **Nhân vật**: Nam / Nữ, đổi ngay tại chỗ.
+    - **Chất lượng đồ hoạ**: Tự động / Cao / Vừa / Thấp, kèm dòng ghi chú mức đang dùng.
+  - Mọi lựa chọn được nhớ lại (`src/ui/prefs.ts`, `localStorage` bọc try/catch nên chế độ riêng tư vẫn chạy).
+  - Hướng dẫn điều khiển, tự đổi theo chế độ camera.
+  - **Màn hình cảm ứng** (`pointer: coarse`):
+    - Có joystick ảo.
+    - Ẩn bảng hướng dẫn phím và nhãn phím tắt "(M)", "(F)".
+    - Nút nhỏ lại và tự xuống dòng.
+    - Minimap thu còn 150 px khi màn hình hẹp hơn 640 px.
 - **Deep link**: `/#A15` dịch chuyển thẳng tới trước quầy A15. Chọn một gian trong ô tìm kiếm cũng cập nhật hash của URL.
 
 ## 10. Tải trang & hiệu năng
@@ -201,8 +212,42 @@ Kết quả đã kiểm bằng test:
 
 **Hiệu năng**:
 - Khoảng 250 draw call khi nhìn toàn cảnh cả map, tính cả shadow pass. Booth, viền tường, khung cửa, mái/cửa phòng đều instanced; chữ gộp theo trang atlas; nhân vật gộp theo vật liệu.
-- `pixelRatio ≤ 2`, bóng đổ chỉ phủ vùng quanh nhân vật, sương che phần xa.
+- Bóng đổ chỉ phủ vùng quanh nhân vật, sương che phần xa.
 - Không tải asset ngoài ngoài font: nhân vật và props đều dựng từ primitive.
+
+### Chất lượng đồ hoạ (`src/scene/quality.ts`)
+
+| Mức | pixelRatio tối đa | Bóng đổ | Shadow map | Chữ bảng tên (px/m) | Khử răng cưa |
+|---|---|---|---|---|---|
+| Cao | 2 | có, viền mềm 2.5 | 2048 | 128 | có |
+| Vừa | 1.5 | có, viền mềm 1.5 | 1024 | 112 | có |
+| Thấp | 1 | tắt | – | 96 | tắt |
+
+- **Mức ban đầu** (chế độ Tự động), đoán từ thông tin trình duyệt cho biết:
+  - RAM ≤ 2 GB hoặc ≤ 2 nhân CPU → Thấp.
+  - Màn cảm ứng, RAM ≤ 4 GB hoặc ≤ 4 nhân → Vừa.
+  - Còn lại → Cao.
+  - `navigator.deviceMemory` chỉ có trên Chromium. Safari và Firefox không có nên chỉ dựa vào cảm ứng và số nhân.
+- **Tự hạ mức** (`FpsGovernor`):
+  - Nếu FPS trung bình trong 3 s dưới 40 thì hạ một bậc. Sau đó chờ 3 s rồi mới đo tiếp.
+  - Không đo lúc dựng cảnh (`hold`) và trong 3 s đầu.
+  - Chỉ bỏ qua frame dài hơn 2 s (tạm dừng, máy ngủ). Frame chậm của máy yếu vẫn được tính.
+- Khử răng cưa chỉ đặt được lúc tạo renderer, nên theo mức ban đầu. Các thông số khác đổi ngay khi chạy. Bật/tắt bóng thì đánh dấu `needsUpdate` cho mọi vật liệu để biên dịch lại shader.
+- Chọn tay Cao / Vừa / Thấp sẽ tắt tự hạ.
+
+### Tương thích trình duyệt
+
+- **Yêu cầu WebGL2** (three.js r163 trở lên): iOS/iPadOS 15+, Chrome/Edge/Firefox 100+, Samsung Internet.
+  - `hasWebGL2()` kiểm tra trước khi tạo renderer. Nếu thiếu thì bảng Bắt đầu báo rõ lý do và cách khắc phục (cập nhật trình duyệt, bật tăng tốc phần cứng) thay vì màn hình đen.
+- **Build target** `es2021, safari15, chrome100, edge100, firefox100`: cú pháp mới hơn được Vite hạ xuống.
+- **iOS 15**:
+  - Chưa có `CanvasRenderingContext2D.roundRect`, nên dùng `roundRect()` trong `signAtlas.ts`, tự fallback sang `arcTo`.
+  - CSS `color-mix` có màu nền đặt trước để trình duyệt cũ vẫn hiện được.
+  - Có thêm tiền tố `-webkit-backdrop-filter`.
+- **Mất WebGL context** (điện thoại hết bộ nhớ GPU, chuyển app lâu):
+  - `webglcontextlost` hiện thông báo "Đồ hoạ tạm dừng" kèm nút Tải lại.
+  - Khi trình duyệt trả context (`webglcontextrestored`) thì thông báo tự ẩn.
+- **Lỗi khi tải chi tiết** (mạng rớt khi tải chunk `experience`): bảng Bắt đầu báo lỗi và gợi ý tải lại trang.
 
 ## 11. Cấu trúc code
 
@@ -219,7 +264,8 @@ src/
     walls.ts            tường từ viền hall, cắt lỗ cửa
     colliders.ts        AABB + spatial hash + đẩy hình tròn
   scene/                dựng three.js
-    setup.ts            renderer, ánh sáng, bầu trời, bắt bóng vào lưới texel
+    setup.ts            renderer, kiểm tra WebGL2, ánh sáng, bầu trời, bắt bóng vào lưới texel
+    quality.ts          mức chất lượng, đoán theo thiết bị, tự hạ khi FPS thấp
     materials.ts        toon material + ramp + cache
     instancer.ts        gom transform/màu → một InstancedMesh
     proxies.ts          khối giản lược cho màn tổng quan
@@ -229,7 +275,7 @@ src/
     areas.ts            phòng, billboard, cột, sân khấu, check-in, lối vào, nhãn
     signAtlas.ts        atlas chữ cho bảng tên
   player/               nhân vật nam/nữ, điều khiển (thường + theo hướng đi), camera
-  ui/                   màn bắt đầu, HUD, lưu lựa chọn (prefs), CSS
+  ui/                   màn bắt đầu, HUD + menu cài đặt, lưu lựa chọn (prefs.ts), CSS
 ```
 
 ## 12. Hướng mở rộng

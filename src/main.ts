@@ -12,8 +12,10 @@ import { parseMap } from './map/parse';
 import { FollowCamera } from './player/camera';
 import { buildGround } from './scene/ground';
 import { buildProxies } from './scene/proxies';
-import { createScene, followSun } from './scene/setup';
+import { detectQuality, QualityManager, readDeviceHints, type QualityMode } from './scene/quality';
+import { createScene, followSun, hasWebGL2 } from './scene/setup';
 import { buildWalls } from './scene/walls';
+import { loadPref } from './ui/prefs';
 import { setupStartScreen } from './ui/start';
 import type { Experience } from './experience';
 
@@ -30,13 +32,40 @@ async function loadData(): Promise<EventMapData> {
   return snapshot as EventMapData;
 }
 
+/** Late-bound hooks so the start screen can exist before the scene does. */
+let onStartPressed: (gender: 'male' | 'female') => void = () => {};
+const start = setupStartScreen((gender) => onStartPressed(gender));
+
 async function main() {
   const app = document.getElementById('app')!;
   const hudRoot = document.getElementById('hud')!;
 
+  if (!hasWebGL2()) {
+    start.fail(
+      'Thiết bị chưa hỗ trợ bản đồ 3D',
+      'Trình duyệt này không có WebGL2. Hãy cập nhật trình duyệt (iPhone/iPad: iOS 15 trở lên; Chrome, Edge, Firefox bản mới) hoặc bật "tăng tốc phần cứng" trong cài đặt trình duyệt.',
+    );
+    return;
+  }
+
   const map = parseMap(await loadData());
-  const ctx = createScene(app);
+  const savedMode = loadPref('quality') as QualityMode | null;
+  const mode: QualityMode = savedMode && ['auto', 'high', 'medium', 'low'].includes(savedMode) ? savedMode : 'auto';
+  const detected = detectQuality(readDeviceHints());
+  const initialLevel = mode === 'auto' ? detected : mode;
+  const ctx = createScene(app, { antialias: initialLevel !== 'low' });
   const { scene, camera, renderer, sun, sky } = ctx;
+  const quality = new QualityManager(ctx, mode, detected);
+
+  // Mobile browsers may drop the WebGL context under memory pressure: say so instead of a black screen.
+  const notice = document.getElementById('notice')!;
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    notice.hidden = false;
+  });
+  renderer.domElement.addEventListener('webglcontextrestored', () => {
+    notice.hidden = true;
+  });
 
   scene.add(buildGround(map));
   const walls = buildWalls(map);
@@ -47,24 +76,27 @@ async function main() {
   const b = worldRect(map.bounds);
   const center = new THREE.Vector3(b.cx, 0, b.cz);
   const occluders = [...walls.occluders];
-  const follow = new FollowCamera(camera, renderer.domElement, occluders, center);
+  const follow = new FollowCamera(camera, renderer.domElement, occluders, center, Math.max(b.w, b.d) / 2);
   follow.startShowcase();
+  window.addEventListener('resize', () => follow.refit());
 
   let experience: Experience | null = null;
-  const start = setupStartScreen(async (gender) => {
+  onStartPressed = async (gender) => {
     try {
+      quality.hold(10);
       // Prefetch starts on hover/focus too (see below); this await is usually instant.
       const { startExperience } = await import('./experience');
       experience = await startExperience({
-        map, ctx, follow, occluders, proxies, hudRoot, gender,
+        map, ctx, follow, occluders, proxies, hudRoot, gender, quality,
         onProgress: (f, label) => start.progress(f, label),
       });
+      quality.hold(3);
       start.hide();
     } catch (err) {
       console.error(err);
-      start.fail('Không tải được. Hãy tải lại trang.');
+      start.fail('Không tải được bản đồ', 'Hãy tải lại trang. Nếu vẫn lỗi, thử trình duyệt khác hoặc đóng bớt tab để giải phóng bộ nhớ.');
     }
-  });
+  };
   // Warm the detail chunk as soon as the visitor shows intent.
   const prefetch = () => void import('./experience');
   document.getElementById('start-btn')?.addEventListener('pointerenter', prefetch, { once: true });
@@ -72,9 +104,12 @@ async function main() {
 
   const timer = new THREE.Timer();
   timer.connect(document);
+  const fog = scene.fog as THREE.Fog;
   renderer.setAnimationLoop(() => {
     timer.update();
-    const dt = Math.min(timer.getDelta(), 0.05);
+    const raw = timer.getDelta();
+    quality.frame(raw);
+    const dt = Math.min(raw, 0.05);
     const t = timer.getElapsed();
     if (experience) {
       experience.update(dt, t);
@@ -86,15 +121,17 @@ async function main() {
       followSun(sun, center);
     }
     sky.position.copy(camera.position);
+    // Push the fog back when the camera is far out (overview, portrait phones) so the map stays visible.
+    fog.near = Math.max(90, follow.distance * 0.9);
+    fog.far = Math.max(320, follow.distance * 2.2);
     renderer.render(scene, camera);
   });
 
   start.ready();
-  Object.assign(window, { __jf: { map, follow, renderer, scene } });
+  Object.assign(window, { __jf: { map, follow, renderer, scene, quality } });
 }
 
 main().catch((err) => {
   console.error(err);
-  const button = document.getElementById('start-btn');
-  if (button) button.textContent = 'Không tải được bản đồ. Vui lòng thử lại.';
+  start.fail('Không tải được bản đồ', 'Hãy tải lại trang. Nếu vẫn lỗi, thử trình duyệt khác.');
 });
