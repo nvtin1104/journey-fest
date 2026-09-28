@@ -10,7 +10,8 @@ Thiết kế chi tiết: [docs/DESIGN.md](docs/DESIGN.md).
 pnpm install
 pnpm dev          # http://localhost:4317
 pnpm test         # unit test cho phần xử lý dữ liệu map
-pnpm build        # bản build tĩnh trong dist/ (deploy Vercel/Netlify)
+pnpm build        # bản build tĩnh trong dist/ (deploy Cloudflare Pages / Vercel / Netlify)
+pnpm deploy:cf    # build và deploy lên Cloudflare Pages qua wrangler
 ```
 
 Mặc định app dùng snapshot `src/data/event-map.json`. Để lấy dữ liệu live:
