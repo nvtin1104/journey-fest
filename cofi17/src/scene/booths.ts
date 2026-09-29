@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BOOTH, PAVILION, SCALE } from '../config';
-import { facingAngle, overlapArea, worldRect } from '../map/coords';
+import { facingAngle, facingVector, overlapArea, worldRect } from '../map/coords';
 import type { ParsedMap, Stand } from '../map/parse';
 import { toonUnique, tint, unitBox } from './materials';
 import { Instancer } from './instancer';
@@ -29,6 +29,19 @@ function rng(seed: number) {
 export function standSize(s: Stand) {
   const along = s.facing === 'N' || s.facing === 'S';
   return { W: (along ? s.rect.w : s.rect.h) * SCALE, D: (along ? s.rect.h : s.rect.w) * SCALE };
+}
+
+/** Point in front of a stand's counter plus the heading that looks at it. */
+export function standFront(s: Stand, gap = 1.3) {
+  const { cx, cz } = worldRect(s.rect);
+  const f = facingVector(s.facing);
+  const { D } = standSize(s);
+  return {
+    x: cx + f.x * (D / 2 + gap),
+    z: cz + f.z * (D / 2 + gap),
+    heading: Math.atan2(-f.x, -f.z),
+    cameraYaw: Math.atan2(f.x, f.z),
+  };
 }
 
 /** World transform of a stand: origin at its centre on the floor, local +Z towards its front. */

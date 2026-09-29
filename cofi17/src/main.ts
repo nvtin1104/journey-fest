@@ -78,7 +78,13 @@ async function main() {
   const occluders = [...walls.occluders];
   const follow = new FollowCamera(camera, renderer.domElement, occluders, center, Math.max(b.w, b.d) / 2);
   follow.startShowcase();
-  window.addEventListener('resize', () => follow.refit());
+  const onResize = () => follow.refit();
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => {
+    onResize();
+    setTimeout(onResize, 100);
+    setTimeout(onResize, 300);
+  });
 
   let experience: Experience | null = null;
   onStartPressed = async (gender) => {

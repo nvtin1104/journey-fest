@@ -8,11 +8,13 @@ import { SPAWN } from './config';
 import { buildColliders } from './map/colliders';
 import { facingVector, toWorldX, toWorldZ, worldRect } from './map/coords';
 import type { ParsedMap, Stand } from './map/parse';
+import { Pathfinder, type Point2D } from './map/pathfinding';
 import { createAvatar, type Gender } from './player/avatar';
 import type { FollowCamera } from './player/camera';
 import { PlayerController } from './player/controller';
 import { buildAreas } from './scene/areas';
-import { buildStands, standSize } from './scene/booths';
+import { buildStands, standFront, standSize } from './scene/booths';
+import { NavigationVisualizer } from './scene/navigation';
 import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
 import { FONT, SignAtlas } from './scene/signAtlas';
@@ -45,14 +47,6 @@ async function fontsReady() {
   await Promise.race([load, new Promise((r) => setTimeout(r, 2500))]);
 }
 
-/** Point in front of a stand's counter plus the heading that looks at it. */
-function standFront(s: Stand, gap = 1.3) {
-  const { cx, cz } = worldRect(s.rect);
-  const f = facingVector(s.facing);
-  const { D } = standSize(s);
-  return { x: cx + f.x * (D / 2 + gap), z: cz + f.z * (D / 2 + gap), heading: Math.atan2(-f.x, -f.z), cameraYaw: Math.atan2(f.x, f.z) };
-}
-
 export async function startExperience(o: ExperienceOptions): Promise<Experience> {
   const { map, ctx, follow, occluders, proxies } = o;
   const { scene, camera, renderer } = ctx;
@@ -68,6 +62,8 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   o.onProgress(0.2, 'Đang dựng gian hàng…');
   await nextFrame();
   const world = buildColliders(map);
+  const pathfinder = new Pathfinder(world, map.bounds);
+
   const atlas = new SignAtlas(QUALITY[o.quality.level].signPxPerMeter);
   detail.add(buildStands(map, atlas));
 
@@ -76,6 +72,10 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const areas = buildAreas(map, atlas);
   detail.add(areas.group);
   occluders.push(...areas.occluders);
+
+  // 3D Navigation path visualizer
+  const navigation = new NavigationVisualizer();
+  scene.add(navigation.group);
 
   o.onProgress(0.65, 'Đang in bảng tên…');
   await nextFrame();
@@ -102,7 +102,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   player.teleport(spawn.x, spawn.z, spawn.heading);
   follow.intro(spawnYaw);
 
-  // Marker that bobs over the booth the visitor is looking at.
+  // Marker that bobs over the booth the visitor is looking at or navigating to.
   const pointer = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), new THREE.MeshBasicMaterial({ color: '#ff4f9a' }));
   pointer.visible = false;
   scene.add(pointer);
@@ -111,39 +111,147 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     follow.setOverview(false);
     hud.setOverview(false);
   };
-  const goToStand = (s: Stand) => {
+
+  let activeDestination: Stand | null = null;
+  let activeRoute: Point2D[] = [];
+  let lastRouteCalcTime = 0;
+  let lastCalcPos = { x: spawn.x, z: spawn.z };
+
+  const updateRoute = (force = false) => {
+    if (!activeDestination) {
+      activeRoute = [];
+      navigation.clear();
+      hud.setNavigation(null);
+      return;
+    }
+    const p = standFront(activeDestination);
+    const distFromLast = Math.hypot(player.position.x - lastCalcPos.x, player.position.z - lastCalcPos.z);
+    if (!force && activeRoute.length > 0 && distFromLast < 1.2) {
+      activeRoute[0] = { x: player.position.x, z: player.position.z };
+      navigation.setPath(activeRoute);
+      return;
+    }
+    lastCalcPos = { x: player.position.x, z: player.position.z };
+    activeRoute = pathfinder.findPath(player.position.x, player.position.z, p.x, p.z);
+    navigation.setPath(activeRoute);
+  };
+
+  const startNavigation = (s: Stand) => {
+    activeDestination = s;
+    updateRoute(true);
+    const p = standFront(s);
+    const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
+    hud.setNavigation({ destination: s, distance: dist, isInspecting: follow.isInspecting() });
+    hud.showToast(`Đang dẫn đường đến gian ${s.code || s.name}`);
+  };
+
+  const cancelNavigation = () => {
+    activeDestination = null;
+    activeRoute = [];
+    navigation.clear();
+    hud.setNavigation(null);
+  };
+
+  /**
+   * Search selection flow:
+   * Frames the booth with the camera while KEEPING the visitor in place!
+   * Automatically sets up guidance route from the visitor's current location to the booth.
+   */
+  const selectStandFromSearch = (s: Stand) => {
+    const p = standFront(s);
+    const { cx, cz } = worldRect(s.rect);
+    const standCenter = new THREE.Vector3(cx, 1.4, cz);
+
+    leaveOverview();
+    follow.skipIntro();
+    follow.inspectStand(standCenter, p.cameraYaw, 11);
+
+    activeDestination = s;
+    updateRoute(true);
+    const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
+    hud.setNavigation({ destination: s, distance: dist, isInspecting: true });
+
+    hud.showStand(s);
+    history.replaceState(null, '', `#${encodeURIComponent(s.code.split('–')[0] || s.name)}`);
+  };
+
+  /** Fast travel directly to a booth */
+  const teleportToStand = (s: Stand) => {
     const p = standFront(s);
     player.teleport(p.x, p.z, p.heading);
     leaveOverview();
     follow.skipIntro();
     follow.snapBehind(p.cameraYaw);
+    if (activeDestination === s) {
+      cancelNavigation();
+      hud.showToast(`Đã đến gian hàng ${s.code || s.name}`);
+    } else if (activeDestination) {
+      updateRoute(true);
+    }
     history.replaceState(null, '', `#${encodeURIComponent(s.code.split('–')[0] || s.name)}`);
   };
+
+  /** User location setting (from "Vị trí của tôi" modal or "Tôi đang ở đây" button) */
+  const setPlayerLocation = (x: number, z: number, heading = 0, label?: string) => {
+    player.teleport(x, z, heading);
+    leaveOverview();
+    follow.snapBehind(heading + Math.PI);
+    follow.stopInspect();
+    if (activeDestination) {
+      updateRoute(true);
+      const p = standFront(activeDestination);
+      const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
+      hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: false });
+    }
+    if (label) {
+      hud.showToast(`Đã chuyển vị trí về: ${label}`);
+    }
+  };
+
+  const toggleCameraTarget = () => {
+    if (follow.isInspecting()) {
+      follow.stopInspect();
+      if (activeDestination) {
+        const p = standFront(activeDestination);
+        const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
+        hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: false });
+      }
+    } else if (activeDestination) {
+      const p = standFront(activeDestination);
+      const { cx, cz } = worldRect(activeDestination.rect);
+      follow.inspectStand(new THREE.Vector3(cx, 1.4, cz), p.cameraYaw, 11);
+      const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
+      hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: true });
+    }
+  };
+
   const toggleOverview = () => {
     const on = follow.mode !== 'overview';
     follow.setOverview(on);
     hud.setOverview(on);
   };
+
   const setFocus = (on: boolean) => {
     player.focus = on;
     follow.setFocus(on, player.heading);
     hud.setFocus(on);
     savePref('focus', on ? '1' : '0');
   };
+
   let gender = o.gender;
   const selectCharacter = (g: Gender) => {
     if (g === gender) return;
     gender = g;
     player.setAvatar(createAvatar(gender));
     hud.setGender(gender);
-  hud.setQuality(o.quality.mode, o.quality.level);
-  o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
+    hud.setQuality(o.quality.mode, o.quality.level);
+    o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
     savePref('gender', gender);
   };
   const switchCharacter = () => selectCharacter(gender === 'male' ? 'female' : 'male');
 
   const hud = new Hud(o.hudRoot, map, {
-    onSelectStand: goToStand,
+    onSelectStand: selectStandFromSearch,
     onToggleOverview: toggleOverview,
     onToggleFocus: () => setFocus(!player.focus),
     onSelectCharacter: selectCharacter,
@@ -152,65 +260,108 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       savePref('quality', mode);
     },
     onGoEntrance: () => {
-      player.teleport(spawn.x, spawn.z, spawn.heading);
-      leaveOverview();
-      follow.snapBehind(spawnYaw);
+      setPlayerLocation(spawn.x, spawn.z, spawn.heading, 'Lối vào khu Check-in');
     },
     onMinimapClick: (mx, my) => {
-      player.teleport(toWorldX(mx), toWorldZ(my));
+      // Kiểm tra xem click trúng gian hàng nào trong danh sách
+      const hitStand = interactive.find((s) => {
+        const { x, y, w, h } = s.rect;
+        return mx >= x - 0.4 && mx <= x + w + 0.4 && my >= y - 0.4 && my <= y + h + 0.4;
+      });
+      if (hitStand) {
+        // Đưa góc nhìn tới gian và mở thông tin gian, user đứng nguyên!
+        selectStandFromSearch(hitStand);
+        return;
+      }
+      // Click vào vị trí bất kỳ trên bản đồ: đưa view camera tới đó luôn, user đứng yên!
       leaveOverview();
+      follow.skipIntro();
+      const wx = toWorldX(mx);
+      const wz = toWorldZ(my);
+      follow.inspectStand(new THREE.Vector3(wx, 1.4, wz), player.heading, 12);
+      hud.showToast('Đã chuyển góc nhìn tới vị trí được chọn');
     },
     onJoystick: (x, y) => {
       player.joystick = { x, y };
-      if (x || y) follow.skipIntro();
+      if (x || y) {
+        follow.skipIntro();
+        if (follow.isInspecting()) follow.stopInspect();
+      }
     },
+    onSetLocation: setPlayerLocation,
+    onStartNavigation: startNavigation,
+    onCancelNavigation: cancelNavigation,
+    onTeleportToStand: teleportToStand,
+    onToggleCameraTarget: toggleCameraTarget,
   });
+
   hud.setGender(gender);
   hud.setQuality(o.quality.mode, o.quality.level);
   o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
   setFocus(loadPref('focus') === '1');
 
-  // Tap on the floor: walk there (or jump there from the overview).
+  // Interactive booths for detection & tapping
+  const interactive = map.stands.filter((s) => s.kind !== 'foodcourt');
+
+  // Tap on the floor: walk there (or tap a stand in 3D to inspect it)
   const raycaster = new THREE.Raycaster();
   const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   follow.onTap = (cx, cy) => {
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
+
     const hit = raycaster.ray.intersectPlane(floor, new THREE.Vector3());
     if (!hit) return;
+
+    // Check if user tapped directly on a stand in 3D
+    const clickedStand = interactive.find((s) => {
+      const { cx: scx, cz: scz, w, d } = worldRect(s.rect);
+      return Math.abs(hit.x - scx) <= w / 2 + 0.4 && Math.abs(hit.z - scz) <= d / 2 + 0.4;
+    });
+
+    if (clickedStand) {
+      selectStandFromSearch(clickedStand);
+      return;
+    }
+
     if (follow.mode === 'overview') {
       player.teleport(hit.x, hit.z);
       toggleOverview();
     } else {
       follow.skipIntro();
+      if (follow.isInspecting()) follow.stopInspect();
       player.walkTo(hit.x, hit.z);
     }
   };
 
+  // Keyboard controls: Escape to close, M for overview, F for focus, E to view stand details
   window.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
     if (e.code === 'KeyM') toggleOverview();
     else if (e.code === 'KeyF') setFocus(!player.focus);
-    else if (e.code === 'Escape' && follow.mode === 'overview') toggleOverview();
-    else follow.skipIntro();
-  });
-
-  // Deep link: #A15 jumps to that booth.
-  const findByHash = () => {
-    const q = normalize(decodeURIComponent(location.hash.slice(1)));
-    if (!q) return null;
-    return map.stands.find((s) => normalize(s.code).split('–').includes(q)) ?? map.stands.find((s) => normalize(s.name) === q) ?? null;
-  };
-  const initial = findByHash();
-  if (initial) goToStand(initial);
-  window.addEventListener('hashchange', () => {
-    const s = findByHash();
-    if (s) goToStand(s);
+    else if (e.code === 'KeyE') {
+      const cur = hud.getCurrentNearbyStand();
+      if (cur) {
+        if (hud.isCardVisible()) {
+          hud.hideStand();
+        } else {
+          hud.showStand(cur);
+        }
+      }
+    } else if (e.code === 'Escape') {
+      if (hud.isCardVisible()) hud.hideStand();
+      else if (follow.mode === 'overview') toggleOverview();
+      else if (follow.isInspecting()) follow.stopInspect();
+    } else {
+      follow.skipIntro();
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(e.code)) {
+        if (follow.isInspecting()) follow.stopInspect();
+      }
+    }
   });
 
   // Which stand is the visitor standing in front of?
-  const interactive = map.stands.filter((s) => s.kind !== 'foodcourt');
   const nearbyStand = (): Stand | null => {
     let best: Stand | null = null;
     let bestDist = Infinity;
@@ -230,25 +381,65 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     return best;
   };
 
+  // Deep link: #A15 or #D5 frames that booth without moving the visitor
+  const findByHash = () => {
+    const q = normalize(decodeURIComponent(location.hash.slice(1)));
+    if (!q) return null;
+    return map.stands.find((s) => normalize(s.code).split('–').includes(q)) ?? map.stands.find((s) => normalize(s.name) === q) ?? null;
+  };
+  const initial = findByHash();
+  if (initial) {
+    selectStandFromSearch(initial);
+  }
+  window.addEventListener('hashchange', () => {
+    const s = findByHash();
+    if (s) selectStandFromSearch(s);
+  });
+
   o.onProgress(1, 'Sẵn sàng');
   let lastProbe = -1;
   let current: Stand | null = null;
 
   const update = (dt: number, t: number) => {
-    if (player.hasInput) follow.skipIntro();
+    if (player.hasInput) {
+      follow.skipIntro();
+      if (follow.isInspecting()) follow.stopInspect();
+    }
     player.update(dt, follow.forward());
     areas.update(t);
+    navigation.update(t);
+
     if (t - lastProbe > 0.1) {
       lastProbe = t;
       current = follow.mode === 'follow' ? nearbyStand() : null;
-      hud.showStand(current);
-      hud.drawMinimap(player.position.x, player.position.z, player.heading);
+
+      // Update nearby stand info (Desktop: show directly, Mobile: show tap pill)
+      hud.updateNearbyStand(current, follow.isInspecting());
+
+      // Update active navigation state
+      if (activeDestination) {
+        const pFront = standFront(activeDestination);
+        const dist = Math.hypot(pFront.x - player.position.x, pFront.z - player.position.z);
+        hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: follow.isInspecting() });
+
+        if (dist < 2.0) {
+          hud.showToast(`🎉 Bạn đã đến gian hàng ${activeDestination.code || activeDestination.name}!`);
+          cancelNavigation();
+        } else if (t - lastRouteCalcTime > 0.8) {
+          lastRouteCalcTime = t;
+          updateRoute();
+        }
+      }
+
+      hud.drawMinimap(player.position.x, player.position.z, player.heading, activeRoute);
     }
-    if (current) {
-      const { cx, cz } = worldRect(current.rect);
-      const f = facingVector(current.facing);
-      const { D } = standSize(current);
-      const top = current.kind === 'pavilion' ? 3.9 : 2.95;
+
+    const highlightTarget = current || activeDestination;
+    if (highlightTarget) {
+      const { cx, cz } = worldRect(highlightTarget.rect);
+      const f = facingVector(highlightTarget.facing);
+      const { D } = standSize(highlightTarget);
+      const top = highlightTarget.kind === 'pavilion' ? 3.9 : 2.95;
       pointer.visible = true;
       pointer.position.set(cx + f.x * (D / 2), top + Math.sin(t * 3) * 0.08, cz + f.z * (D / 2));
       pointer.rotation.y = t * 2;
@@ -257,6 +448,18 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     }
   };
 
-  Object.assign((window as unknown as { __jf: object }).__jf, { player, world, goToStand, setFocus, switchCharacter });
+  Object.assign((window as unknown as { __jf: object }).__jf, {
+    player,
+    world,
+    pathfinder,
+    selectStandFromSearch,
+    teleportToStand,
+    setPlayerLocation,
+    startNavigation,
+    cancelNavigation,
+    setFocus,
+    switchCharacter,
+  });
+
   return { player, update };
 }

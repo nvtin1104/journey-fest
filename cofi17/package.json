@@ -12,6 +12,7 @@
     "deploy:cf": "pnpm build && npx --yes wrangler pages deploy dist"
   },
   "dependencies": {
+    "lucide": "^1.48.0",
     "three": "^0.186.1"
   },
   "devDependencies": {

@@ -40,6 +40,7 @@ export class FollowCamera {
   private target = new THREE.Vector3();
   private followDistance = FOLLOW.distance;
   private followYaw = 0;
+  private inspectTarget: THREE.Vector3 | null = null;
   private rate = 1.6;
   private raycaster = new THREE.Raycaster();
   private pointers = new Map<number, { x: number; y: number }>();
@@ -79,6 +80,7 @@ export class FollowCamera {
 
   /** Flies from wherever the camera is (usually the overview) down behind the visitor. */
   intro(yaw: number) {
+    this.inspectTarget = null;
     this.showcase = false;
     this.mode = 'follow';
     this.targetYaw = yaw;
@@ -92,10 +94,35 @@ export class FollowCamera {
   }
 
   snapBehind(yaw: number) {
+    this.inspectTarget = null;
     this.targetYaw = yaw;
   }
 
+  /** Focus the camera on a stand's counter front while keeping the visitor in place */
+  inspectStand(pos: THREE.Vector3, cameraYaw: number, distance = 10) {
+    this.mode = 'follow';
+    this.showcase = false;
+    this.inspectTarget = pos.clone();
+    this.targetYaw = cameraYaw;
+    this.targetPitch = 0.42;
+    this.targetDistance = distance;
+    this.rate = 3.5;
+  }
+
+  stopInspect() {
+    if (!this.inspectTarget) return;
+    this.inspectTarget = null;
+    this.targetPitch = FOLLOW.pitch;
+    this.targetDistance = FOLLOW.distance;
+    this.rate = 3.5;
+  }
+
+  isInspecting(): boolean {
+    return this.inspectTarget !== null;
+  }
+
   setOverview(on: boolean) {
+    this.inspectTarget = null;
     if (on === (this.mode === 'overview')) return;
     if (on) {
       this.followDistance = this.targetDistance;
@@ -198,7 +225,11 @@ export class FollowCamera {
       this.rate = Math.max(this.rate, 4);
     }
     const k = 1 - Math.exp(-this.rate * dt);
-    const goal = this.mode === 'overview' ? this.overviewCenter : new THREE.Vector3(player.x, player.y + HEAD_HEIGHT, player.z);
+    const goal = this.mode === 'overview'
+      ? this.overviewCenter
+      : this.inspectTarget
+        ? this.inspectTarget
+        : new THREE.Vector3(player.x, player.y + HEAD_HEIGHT, player.z);
     // During the intro fly-in the target glides at the same pace as the zoom; afterwards it sticks to the visitor.
     const followRate = this.rate < 6 && this.mode === 'follow' ? this.rate * 1.5 : 10;
     this.target.lerp(goal, this.mode === 'overview' ? k : 1 - Math.exp(-followRate * dt));
@@ -220,7 +251,9 @@ export class FollowCamera {
   private fadeOccluders(dt: number, player: THREE.Vector3) {
     const hidden = new Set<THREE.Object3D>();
     if (this.mode === 'follow') {
-      const head = new THREE.Vector3(player.x, player.y + 1.1, player.z);
+      const head = this.inspectTarget
+        ? this.inspectTarget.clone().add(new THREE.Vector3(0, 0.5, 0))
+        : new THREE.Vector3(player.x, player.y + 1.1, player.z);
       const dir = head.clone().sub(this.camera.position);
       const len = dir.length();
       this.raycaster.set(this.camera.position, dir.normalize());

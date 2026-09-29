@@ -184,12 +184,40 @@ export function buildAreas(map: ParsedMap, atlas: SignAtlas): AreasResult {
 
   // Green entrance arrow on the sidewalk, plus a bobbing marker over the check-in door.
   if (map.signParts.length) {
-    const arrowMat = toon('#7de37b');
-    for (const p of map.signParts) {
-      const { cx, cz, w, d } = worldRect(p);
-      group.add(meshAt(arrowMat, new THREE.Matrix4().compose(new THREE.Vector3(cx, 0.08, cz), new THREE.Quaternion(), new THREE.Vector3(w, 0.16, d))));
-    }
     const r = unionRect(map.signParts);
+    const { cx, cz, w, d } = worldRect(r);
+
+    // Render cleanly on a single 2D plane texture to eliminate all z-fighting from overlapping boxes
+    const cWidth = 1024;
+    const cHeight = Math.max(128, Math.round((cWidth * r.h) / r.w));
+    const canvas = document.createElement('canvas');
+    canvas.width = cWidth;
+    canvas.height = cHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#7de37b';
+    for (const p of map.signParts) {
+      const px = ((p.x - r.x) / r.w) * cWidth;
+      const py = ((p.y - r.y) / r.h) * cHeight;
+      const pw = (p.w / r.w) * cWidth;
+      const ph = (p.h / r.h) * cHeight;
+      ctx.fillRect(Math.floor(px) - 1, Math.floor(py) - 1, Math.ceil(pw) + 2, Math.ceil(ph) + 2);
+    }
+    const arrowTex = new THREE.CanvasTexture(canvas);
+    arrowTex.colorSpace = THREE.SRGBColorSpace;
+    const arrowMat = new THREE.MeshToonMaterial({
+      map: arrowTex,
+      transparent: true,
+      alphaTest: 0.1,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -8,
+    });
+    const arrowPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), arrowMat);
+    arrowPlane.rotateX(-Math.PI / 2);
+    arrowPlane.position.set(cx, 0.018, cz);
+    arrowPlane.receiveShadow = true;
+    group.add(arrowPlane);
+
     const tag = makeLabel('LỐI VÀO', 1.1, { bg: 'rgba(76,175,80,0.95)', fg: '#ffffff', size: 64, icon: '←' });
     tag.position.set(toWorldX(r.x + r.w / 2), 2.6, toWorldZ(r.y + r.h / 2));
     group.add(tag);

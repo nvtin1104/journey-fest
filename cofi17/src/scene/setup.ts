@@ -54,10 +54,16 @@ export function createScene(container: HTMLElement, opts: { antialias: boolean }
   sun.shadow.radius = 2.5;
   scene.add(sun, sun.target);
 
-  window.addEventListener('resize', () => {
+  const onResize = () => {
     camera.aspect = container.clientWidth / container.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
+  };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => {
+    onResize();
+    setTimeout(onResize, 100);
+    setTimeout(onResize, 300);
   });
 
   return { renderer, scene, camera, sun, sky };

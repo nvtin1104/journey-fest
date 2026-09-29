@@ -30,14 +30,46 @@ function floorMaterial(color: THREE.ColorRepresentation, map: THREE.Texture | nu
   });
 }
 
-function plane(r: Rect, y: number, mat: THREE.Material, repeatMeters?: number) {
+function subtractRect(subj: Rect, clipper: Rect): Rect[] {
+  const ox1 = Math.max(subj.x, clipper.x);
+  const oy1 = Math.max(subj.y, clipper.y);
+  const ox2 = Math.min(subj.x + subj.w, clipper.x + clipper.w);
+  const oy2 = Math.min(subj.y + subj.h, clipper.y + clipper.h);
+  if (ox1 >= ox2 || oy1 >= oy2) return [subj];
+
+  const pieces: Rect[] = [];
+  if (subj.x < ox1) {
+    pieces.push({ x: subj.x, y: subj.y, w: ox1 - subj.x, h: subj.h });
+  }
+  if (ox2 < subj.x + subj.w) {
+    pieces.push({ x: ox2, y: subj.y, w: subj.x + subj.w - ox2, h: subj.h });
+  }
+  if (subj.y < oy1) {
+    pieces.push({ x: ox1, y: subj.y, w: ox2 - ox1, h: oy1 - subj.y });
+  }
+  if (oy2 < subj.y + subj.h) {
+    pieces.push({ x: ox1, y: oy2, w: ox2 - ox1, h: subj.y + subj.h - oy2 });
+  }
+  return pieces;
+}
+
+function plane(r: Rect, y: number, mat: THREE.Material, repeatMeters?: number, alignWorld = false) {
   const { cx, cz, w, d } = worldRect(r);
   const geo = new THREE.PlaneGeometry(w, d);
   geo.rotateX(-Math.PI / 2);
   if (repeatMeters) {
     const uv = geo.attributes.uv as THREE.BufferAttribute;
-    for (let i = 0; i < uv.count; i++) {
-      uv.setXY(i, uv.getX(i) * (w / repeatMeters), uv.getY(i) * (d / repeatMeters));
+    if (alignWorld) {
+      const pos = geo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i++) {
+        const wx = cx + pos.getX(i);
+        const wz = cz + pos.getZ(i);
+        uv.setXY(i, wx / repeatMeters, wz / repeatMeters);
+      }
+    } else {
+      for (let i = 0; i < uv.count; i++) {
+        uv.setXY(i, uv.getX(i) * (w / repeatMeters), uv.getY(i) * (d / repeatMeters));
+      }
     }
   }
   const mesh = new THREE.Mesh(geo, mat);
@@ -95,8 +127,28 @@ export function buildGround(map: ParsedMap): THREE.Group {
     ctx.lineWidth = 3;
     ctx.strokeRect(0, 0, s, s);
   });
-  for (const g of map.grounds.filter((g) => g.kind === 'sidewalk')) {
-    group.add(plane(g.rect, LAYER.sidewalk, floorMaterial(tint(g.color, 0.25), tileTex, 1), 1.5));
+  // Resolve overlaps between sidewalks so no two meshes share the same space (prevents z-fighting).
+  const rawSidewalks = map.grounds.filter((g) => g.kind === 'sidewalk');
+  const verticals = rawSidewalks.filter((s) => s.rect.h > s.rect.w);
+  const horizontals = rawSidewalks.filter((s) => s.rect.w >= s.rect.h);
+
+  const resolvedSidewalks: Array<{ rect: Rect; color: string }> = [...verticals];
+  for (const h of horizontals) {
+    let parts: Rect[] = [h.rect];
+    for (const v of verticals) {
+      const nextParts: Rect[] = [];
+      for (const p of parts) {
+        nextParts.push(...subtractRect(p, v.rect));
+      }
+      parts = nextParts;
+    }
+    for (const p of parts) {
+      resolvedSidewalks.push({ rect: p, color: h.color });
+    }
+  }
+
+  for (const sw of resolvedSidewalks) {
+    group.add(plane(sw.rect, LAYER.sidewalk, floorMaterial(tint(sw.color, 0.25), tileTex, 1), 1.5, true));
   }
 
   // Hall floors: soft lavender with a 2 m grid.
