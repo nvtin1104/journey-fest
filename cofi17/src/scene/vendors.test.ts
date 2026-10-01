@@ -3,6 +3,7 @@ import data from '../data/event-map.json';
 import type { EventMapData } from '../data/types';
 import type { Stand } from '../map/parse';
 import { parseMap } from '../map/parse';
+import { standSize } from './booths';
 import { vendorActionAt, vendorBoothPosition, vendorStyleIndex } from './vendors';
 
 function booth(id: string, width = 40, height = 40): Stand {
@@ -25,6 +26,16 @@ describe('booth vendors', () => {
     const saleStands = map.stands.filter((stand) => stand.kind !== 'foodcourt');
     expect(saleStands.length).toBeGreaterThan(0);
     expect(saleStands.every((stand) => vendorBoothPosition(stand) !== null)).toBe(true);
+  });
+
+  it('keeps pavilion sellers clear of the mid-floor display tables', () => {
+    const map = parseMap(data as EventMapData);
+    for (const stand of map.stands.filter((candidate) => candidate.kind === 'pavilion')) {
+      const position = vendorBoothPosition(stand);
+      if (!position) continue;
+      const { D } = standSize(stand);
+      expect(position.z).toBeGreaterThan(-D * 0.1 + 0.35);
+    }
   });
 
   it('selects a stable style for the same booth id', () => {

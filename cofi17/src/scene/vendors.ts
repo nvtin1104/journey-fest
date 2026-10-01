@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Gender } from '../player/avatar';
 import { avatarMotion, createAvatar } from '../player/avatar';
-import { BOOTH } from '../config';
+import { BOOTH, PAVILION } from '../config';
 import type { Point2D, Pathfinder } from '../map/pathfinding';
 import type { CollisionWorld } from '../map/colliders';
 import type { ParsedMap, Stand } from '../map/parse';
@@ -9,6 +9,10 @@ import { facingAngle, toWorldX, toWorldZ, worldRect, type Rect } from '../map/co
 import { Instancer } from './instancer';
 import { toonUnique, unitBox } from './materials';
 import { standFront, standMatrix, standSize } from './booths';
+
+/** Depth (m) of a pavilion's display tables, and the gap a seller keeps from them. */
+const PAVILION_TABLE_DEPTH = 0.7;
+const VENDOR_CLEARANCE = 0.35;
 
 const STYLES = [
   { gender: 'male', hairStyle: 'spiky', shirtStyle: 'button-up', hairColor: '#251d2a', shirtColor: '#f4f0e6', bottomsColor: '#2d3752' },
@@ -46,6 +50,8 @@ export function vendorStyleIndex(boothId: string) {
 /** Local booth-space position for a seller, or null when the counter leaves too little room. */
 export interface VendorPlacement {
   z: number;
+  /** Floor height under the seller (pavilions stand on a raised deck). */
+  y: number;
   seated: boolean;
   walkRadius: number;
   walkDepth: number;
@@ -57,13 +63,14 @@ export function vendorBoothPosition(stand: Stand): VendorPlacement | null {
   const isPavilion = stand.kind === 'pavilion';
   const counterDepth = isPavilion ? 0.7 : THREE.MathUtils.clamp(D * BOOTH.counterDepthRatio, 0.5, 1.2);
   const counterZ = isPavilion ? D / 2 - 0.6 : D / 2 - counterDepth / 2 - 0.03;
-  const backEdge = -D / 2 + (isPavilion ? 0.36 : 0.11);
-  const counterBack = counterZ - counterDepth / 2 - (isPavilion ? 0.45 : 0.12);
-  if (W < 0.65 || counterBack - backEdge < 0.55) return null;
-  const seated = hashSeed(stand.id) % 5 === 0;
+  // Pavilions keep display tables mid-floor (see buildPavilion): stay in front of them, clear of the body radius.
+  const backEdge = isPavilion ? -D * 0.1 + PAVILION_TABLE_DEPTH / 2 + VENDOR_CLEARANCE : -D / 2 + 0.11;
+  const counterBack = counterZ - counterDepth / 2 - (isPavilion ? 0.15 : 0.12);
+  if (W < 0.65 || counterBack - backEdge < (isPavilion ? 0.2 : 0.55)) return null;
+  const seated = hashSeed(stand.id) % 5 === 0 && counterBack - backEdge >= 0.55;
   const walkRadius = seated || W < 3.2 ? 0 : Math.min(0.9, (W - 0.8) / 2);
-  const walkDepth = walkRadius > 0 ? Math.max(0, Math.min(0.28, (counterBack - backEdge - 0.44) / 2)) : 0;
-  return { z: (backEdge + counterBack) / 2, seated, walkRadius, walkDepth };
+  const walkDepth = walkRadius > 0 && !isPavilion ? Math.max(0, Math.min(0.28, (counterBack - backEdge - 0.44) / 2)) : 0;
+  return { z: (backEdge + counterBack) / 2, y: isPavilion ? PAVILION.floorHeight : 0, seated, walkRadius, walkDepth };
 }
 
 export type VendorAction = 'idle' | 'check-stock' | 'arrange-stock';
@@ -199,7 +206,7 @@ export function buildVendors(stands: Stand[], map?: ParsedMap, pathfinder?: Path
     const standTransform = standMatrix(stand);
     const rotation = new THREE.Quaternion().setFromRotationMatrix(standTransform);
     const center = new THREE.Vector3().setFromMatrixPosition(standTransform);
-    const position = center.add(new THREE.Vector3(0, 0, local.z).applyQuaternion(rotation));
+    const position = center.add(new THREE.Vector3(0, local.y, local.z).applyQuaternion(rotation));
     sourceRoot.traverse((object) => {
       if (!(object instanceof THREE.Mesh) || object.userData.vendorIgnore) return;
       batches.get(object)?.instances.push({
@@ -219,7 +226,7 @@ export function buildVendors(stands: Stand[], map?: ParsedMap, pathfinder?: Path
 
     if (local.seated) {
       const seatColor = ['#b76554', '#6379a4', '#638b75', '#af7b49'][hashSeed(stand.id) % 4];
-      const base = standMatrix(stand);
+      const base = standMatrix(stand).multiply(new THREE.Matrix4().makeTranslation(0, local.y, 0));
       const z = local.z;
       chairSeats.push(vendorBoxMatrix(base, 0.46, 0.08, 0.42, 0, 0.52, z), seatColor);
       chairCushions.push(vendorBoxMatrix(base, 0.42, 0.035, 0.38, 0, 0.578, z + 0.005), seatColor);
