@@ -384,11 +384,13 @@ export class Hud {
       results.innerHTML = '';
       input.blur();
       this.cb.onJoystick(0, 0);
-      this.expandedMap.width = this.minimap.width;
-      this.expandedMap.height = this.minimap.height;
-      this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
+      // Open first and paint the big canvas on the next frame, so the dialog appears instantly.
+      // Resizing a canvas reallocates its bitmap, so only do it when the minimap size changed.
+      if (this.expandedMap.width !== this.minimap.width) this.expandedMap.width = this.minimap.width;
+      if (this.expandedMap.height !== this.minimap.height) this.expandedMap.height = this.minimap.height;
       this.mapModal.showModal();
       reset();
+      requestAnimationFrame(() => this.syncExpandedMap(true));
     });
     window.addEventListener('resize', () => { if (this.mapModal.open) reset(); });
     this.mapModal.addEventListener('close', () => {
@@ -1136,6 +1138,17 @@ export class Hud {
     ctx.stroke();
     ctx.fill();
     ctx.restore();
-    if (this.mapModal.open) this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
+    this.syncExpandedMap(false);
+  }
+
+  private lastExpandedSync = 0;
+
+  /** Mirrors the minimap into the full-screen map; throttled because the bitmap is several megapixels. */
+  private syncExpandedMap(force: boolean) {
+    if (!this.mapModal.open) return;
+    const now = performance.now();
+    if (!force && now - this.lastExpandedSync < 120) return;
+    this.lastExpandedSync = now;
+    this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
   }
 }

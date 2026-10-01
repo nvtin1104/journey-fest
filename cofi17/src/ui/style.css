@@ -1027,13 +1027,20 @@ button { touch-action: manipulation; }
 .poster-modal::backdrop { background:#101828b3; }
 .poster-header { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; margin-bottom:8px; }
 .poster-header button { flex:none; border:0; border-radius:8px; padding:8px 12px; background:#e3ebf1; color:#233746; cursor:pointer; }
-.poster-modal img { display:block; max-width:100%; width:auto; max-height:calc(100dvh - 132px); margin:auto; object-fit:contain; }
-
-.poster-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
-.poster-tabs button { flex:1; padding:8px; border:1px solid #b7cbd7; border-radius:8px; color:#233746; background:#e3ebf1; font:600 12px system-ui; cursor:pointer; }
-.poster-tabs button[aria-pressed='true'] { background:#007de3; color:white; border-color:#007de3; }
-
-.poster-tabs button[hidden] { display:none; }
+.poster-header strong { flex:1; min-width:0; }
+.poster-counter { flex:none; font-weight:700; color:#5b7385; }
+.poster-header button { display:inline-flex; align-items:center; justify-content:center; min-width:36px; min-height:36px; padding:6px; }
+.poster-modal { display:none; }
+.poster-modal[open] { display:flex; flex-direction:column; width:min(960px,calc(100vw - 16px)); height:calc(100dvh - 16px); overflow:hidden; }
+.poster-stage { position:relative; flex:1; min-height:0; overflow:hidden; border-radius:10px; background:#e8f0f4; touch-action:none; user-select:none; }
+.poster-stage img { position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; object-fit:contain; transform-origin:center; will-change:transform; }
+.poster-stage button { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border:1px solid #b7cbd7; border-radius:50%; background:#fffffff2; color:#233746; box-shadow:0 2px 8px #23374622; cursor:pointer; }
+.poster-stage button:disabled { opacity:.4; cursor:default; }
+.poster-stage button[hidden] { display:none; }
+.poster-nav { position:absolute; top:50%; transform:translateY(-50%); z-index:2; }
+.poster-nav.prev { left:8px; }
+.poster-nav.next { right:8px; }
+.poster-zoom { position:absolute; right:8px; bottom:8px; z-index:2; display:flex; gap:6px; }
 
 .poster-nearby[hidden] { display:none; }
 .poster-inspection .card-actions { margin-top:6px; padding-top:6px; }

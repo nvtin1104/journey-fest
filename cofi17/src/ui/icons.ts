@@ -19,10 +19,18 @@ import {
   Check,
   Footprints,
   Route,
+  ChevronLeft,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
   type IconNode,
 } from 'lucide';
 
 export {
+  ChevronLeft,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
   Search,
   Compass,
   Navigation,

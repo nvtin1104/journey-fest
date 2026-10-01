@@ -1,6 +1,17 @@
 import * as THREE from 'three';
 import type { ParsedMap } from '../map/parse';
+import { ChevronLeft, ChevronRight, Maximize, X, ZoomIn, ZoomOut } from '../ui/icons';
+import { makeIcon } from '../ui/icons';
 import { toWorldX, toWorldZ, worldRect } from '../map/coords';
+
+function iconButton(icon: Parameters<typeof makeIcon>[0], label: string) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  button.append(makeIcon(icon, 20));
+  return button;
+}
 
 const guidePages = [
   { url: '/posters/cofi-timeline.png', title: 'Cẩm nang đi COFI · Timeline và lưu ý', tab: 'Timeline & lưu ý' },
@@ -31,35 +42,127 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
   const header = document.createElement('div');
   header.className = 'poster-header';
   const title = document.createElement('strong');
-  const close = document.createElement('button');
-  close.textContent = 'Đóng';
+  const counter = document.createElement('span');
+  counter.className = 'poster-counter';
+  const close = iconButton(X, 'Đóng');
   close.addEventListener('click', () => dialog.close());
-  header.append(title, close);
+  header.append(title, counter, close);
+
+  // Image stage: pan with a drag, zoom with wheel / pinch / buttons / double click.
+  const stage = document.createElement('div');
+  stage.className = 'poster-stage';
   const image = document.createElement('img');
-  const tabs = document.createElement('div');
-  tabs.className = 'poster-tabs';
-  const tabButtons: HTMLButtonElement[] = [];
+  image.draggable = false;
+  const prev = iconButton(ChevronLeft, 'Ảnh trước');
+  prev.classList.add('poster-nav', 'prev');
+  const next = iconButton(ChevronRight, 'Ảnh sau');
+  next.classList.add('poster-nav', 'next');
+  const zoomBar = document.createElement('div');
+  zoomBar.className = 'poster-zoom';
+  const zoomOut = iconButton(ZoomOut, 'Thu nhỏ');
+  const zoomIn = iconButton(ZoomIn, 'Phóng to');
+  const zoomReset = iconButton(Maximize, 'Vừa khung');
+  zoomBar.append(zoomOut, zoomIn, zoomReset);
+  stage.append(image, prev, next, zoomBar);
+  dialog.append(header, stage);
+  document.body.append(dialog);
+
+  let zoom = 1, panX = 0, panY = 0;
+  const applyView = () => {
+    const limitX = Math.max(0, (image.offsetWidth * zoom - stage.clientWidth) / 2);
+    const limitY = Math.max(0, (image.offsetHeight * zoom - stage.clientHeight) / 2);
+    panX = Math.max(-limitX, Math.min(limitX, panX));
+    panY = Math.max(-limitY, Math.min(limitY, panY));
+    image.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${zoom})`;
+    image.style.cursor = zoom > 1 ? 'grab' : 'zoom-in';
+    zoomOut.disabled = zoom <= 1;
+    zoomIn.disabled = zoom >= 6;
+  };
+  const setZoom = (value: number, anchor?: { x: number; y: number }) => {
+    const nextZoom = Math.max(1, Math.min(6, value));
+    if (anchor) {
+      // Keep the point under the cursor fixed (offsets are measured from the stage centre).
+      const ratio = nextZoom / zoom;
+      panX = anchor.x - (anchor.x - panX) * ratio;
+      panY = anchor.y - (anchor.y - panY) * ratio;
+    }
+    zoom = nextZoom;
+    if (zoom === 1) panX = panY = 0;
+    applyView();
+  };
+  const fromCentre = (clientX: number, clientY: number) => {
+    const rect = stage.getBoundingClientRect();
+    return { x: clientX - rect.left - rect.width / 2, y: clientY - rect.top - rect.height / 2 };
+  };
+  zoomIn.addEventListener('click', () => setZoom(zoom * 1.5));
+  zoomOut.addEventListener('click', () => setZoom(zoom / 1.5));
+  zoomReset.addEventListener('click', () => setZoom(1));
+  stage.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    setZoom(zoom * Math.exp(-event.deltaY * 0.002), fromCentre(event.clientX, event.clientY));
+  }, { passive: false });
+  image.addEventListener('dblclick', (event) => {
+    setZoom(zoom > 1 ? 1 : 2.5, fromCentre(event.clientX, event.clientY));
+  });
+  const pointers = new Map<number, { x: number; y: number }>();
+  let pinchDistance = 0;
+  stage.addEventListener('pointerdown', (event) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    stage.setPointerCapture(event.pointerId);
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchDistance = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  });
+  stage.addEventListener('pointermove', (event) => {
+    const previous = pointers.get(event.pointerId);
+    if (!previous) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const distance = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinchDistance > 0) setZoom(zoom * distance / pinchDistance, fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2));
+      pinchDistance = distance;
+    } else if (zoom > 1) {
+      panX += event.clientX - previous.x;
+      panY += event.clientY - previous.y;
+      applyView();
+    }
+  });
+  const release = (event: PointerEvent) => { pointers.delete(event.pointerId); pinchDistance = 0; };
+  stage.addEventListener('pointerup', release);
+  stage.addEventListener('pointercancel', release);
+
+  let current = 0;
   const show = (index: number) => {
     const poster = pages[index];
     if (!poster) return;
+    current = index;
     title.textContent = poster.title;
     dialog.setAttribute('aria-label', poster.title);
     image.src = poster.url;
     image.alt = poster.title;
-    tabButtons.forEach((button, i) => {
-      button.setAttribute('aria-pressed', String(i === index));
-      button.hidden = categoryOf(i) !== categoryOf(index);
-    });
+    const siblings = categoryPages(index);
+    counter.textContent = `${siblings.indexOf(index) + 1} / ${siblings.length}`;
+    prev.hidden = next.hidden = siblings.length < 2;
+    zoom = 1;
+    panX = panY = 0;
+    applyView();
   };
-  pages.forEach((_, index) => {
-    const button = document.createElement('button');
-    button.textContent = pages[index].tab;
-    button.addEventListener('click', () => show(index));
-    tabButtons.push(button);
-    tabs.append(button);
+  const step = (direction: number) => {
+    const siblings = categoryPages(current);
+    show(siblings[(siblings.indexOf(current) + direction + siblings.length) % siblings.length]);
+  };
+  prev.addEventListener('click', () => step(-1));
+  next.addEventListener('click', () => step(1));
+  dialog.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') step(-1);
+    else if (event.key === 'ArrowRight') step(1);
+    else if (event.key === '+' || event.key === '=') setZoom(zoom * 1.5);
+    else if (event.key === '-') setZoom(zoom / 1.5);
   });
-  dialog.append(header, tabs, image);
-  document.body.append(dialog);
+  image.addEventListener('load', applyView);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   const loader = new THREE.TextureLoader();
   const textures = pages.map((poster, index) => {
