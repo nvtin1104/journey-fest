@@ -7,6 +7,10 @@ import { toonGradient, tint } from './materials';
 /** Floor layers, bottom to top. Each gets its own height and polygon offset to avoid z-fighting. */
 const LAYER = { grass: -0.03, road: 0, sidewalk: 0.012, hall: 0.024, zone: 0.036, highlight: 0.048 };
 
+/** Margin (m) of lawn around the venue, and thickness (m) of the soil block under it. */
+const BASE_PAD = 14;
+const BASE_DEPTH = 9;
+
 function patternTexture(size: number, draw: (ctx: CanvasRenderingContext2D, s: number) => void) {
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -82,22 +86,55 @@ export function buildGround(map: ParsedMap): THREE.Group {
   const group = new THREE.Group();
   group.name = 'ground';
 
-  // Grass around the venue.
+  // Display-case base: the venue is cut out as a box with a grass top and a layered soil side,
+  // instead of an endless lawn.
   const b = worldRect(map.bounds);
+  const baseW = b.w + BASE_PAD * 2;
+  const baseD = b.d + BASE_PAD * 2;
   const grassTex = patternTexture(128, (ctx, s) => {
     ctx.fillStyle = '#d4ecc9';
     ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = '#c6e4ba';
     for (let i = 0; i < 40; i++) ctx.fillRect(Math.random() * s, Math.random() * s, 3, 3);
   });
-  const grassGeo = new THREE.PlaneGeometry(b.w + 400, b.d + 400);
+  const grassGeo = new THREE.PlaneGeometry(baseW, baseD);
   grassGeo.rotateX(-Math.PI / 2);
   const uv = grassGeo.attributes.uv as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (b.w + 400) / 4, uv.getY(i) * (b.d + 400) / 4);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * baseW / 4, uv.getY(i) * baseD / 4);
   const grass = new THREE.Mesh(grassGeo, floorMaterial('#ffffff', grassTex, 0));
   grass.position.set(b.cx, LAYER.grass, b.cz);
   grass.receiveShadow = true;
   group.add(grass);
+
+  const sideTex = new THREE.CanvasTexture(
+    (() => {
+      const c = document.createElement('canvas');
+      c.width = 8;
+      c.height = 256;
+      const ctx = c.getContext('2d')!;
+      const bands: Array<[number, string]> = [
+        [0.05, '#9fd08c'], [0.18, '#d9b894'], [0.42, '#c8a27e'], [0.7, '#b58d6c'], [1, '#9a7558'],
+      ];
+      let y = 0;
+      for (const [to, color] of bands) {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, y, 8, to * 256 - y + 1);
+        y = to * 256;
+      }
+      return c;
+    })(),
+  );
+  sideTex.colorSpace = THREE.SRGBColorSpace;
+  const sideMat = new THREE.MeshToonMaterial({ map: sideTex, gradientMap: toonGradient() });
+  const bottomMat = new THREE.MeshToonMaterial({ color: '#7d5f48', gradientMap: toonGradient() });
+  const topY = LAYER.grass - 0.005;
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(baseW, BASE_DEPTH, baseD), [
+    sideMat, sideMat, bottomMat, bottomMat, sideMat, sideMat,
+  ]);
+  slab.position.set(b.cx, topY - BASE_DEPTH / 2, b.cz);
+  slab.receiveShadow = true;
+  slab.name = 'display-base';
+  group.add(slab);
 
   // Roads: asphalt with a dashed centre line running along the long side.
   const roadTex = patternTexture(128, (ctx, s) => {

@@ -11,6 +11,7 @@ import { worldRect } from './map/coords';
 import { parseMap } from './map/parse';
 import { FollowCamera } from './player/camera';
 import { buildGround } from './scene/ground';
+import { buildClouds } from './scene/clouds';
 import { buildProxies } from './scene/proxies';
 import { detectQuality, QualityManager, readDeviceHints, type QualityMode } from './scene/quality';
 import { createScene, followSun, hasWebGL2 } from './scene/setup';
@@ -75,6 +76,8 @@ async function main() {
   });
 
   scene.add(buildGround(map));
+  const clouds = buildClouds(map);
+  scene.add(clouds.group);
   const walls = buildWalls(map);
   scene.add(walls.group);
   const proxies = buildProxies(map);
@@ -134,6 +137,7 @@ async function main() {
       followSun(sun, center);
     }
     sky.position.copy(camera.position);
+    clouds.update(t);
     // Push the fog back when the camera is far out (overview, portrait phones) so the map stays visible.
     fog.near = Math.max(90, follow.distance * 0.9);
     fog.far = Math.max(320, follow.distance * 2.2);
