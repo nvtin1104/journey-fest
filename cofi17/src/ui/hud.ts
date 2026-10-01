@@ -251,7 +251,6 @@ export class Hud {
     const closeMap = el('button', 'map-close', 'Đóng');
     closeMap.addEventListener('click', () => this.mapModal.close());
     mapHeader.append(mapTitle, closeMap);
-    const mapHint = el('p', 'map-hint', 'Kéo để di chuyển · Chụm hai ngón để phóng to · Chọn gian để đánh dấu');
     const viewport = el('div', 'map-scroll');
     const surface = el('div', 'map-surface');
     this.expandedMap = el('canvas', 'expanded-map');
@@ -292,23 +291,44 @@ export class Hud {
     let zoom = 1, panX = 0, panY = 0, fit = 1, dragged = false;
     const pointers = new Map<number, { x: number; y: number }>();
     let gestureDistance = 0;
+    let gestureCenter: { x: number; y: number } | null = null;
+    let renderFrame = 0;
     const render = () => {
       const width = bounds.w * fit * zoom, height = bounds.h * fit * zoom;
       panX = Math.max(-Math.max(0, (width - viewport.clientWidth) / 2), Math.min(Math.max(0, (width - viewport.clientWidth) / 2), panX));
       panY = Math.max(-Math.max(0, (height - viewport.clientHeight) / 2), Math.min(Math.max(0, (height - viewport.clientHeight) / 2), panY));
-      surface.style.width = `${width}px`;
-      surface.style.height = `${height}px`;
-      surface.style.transform = `translate(${(viewport.clientWidth - width) / 2 + panX}px, ${(viewport.clientHeight - height) / 2 + panY}px)`;
+      surface.style.width = `${bounds.w * fit}px`;
+      surface.style.height = `${bounds.h * fit}px`;
+      surface.style.transform = `translate3d(${(viewport.clientWidth - width) / 2 + panX}px, ${(viewport.clientHeight - height) / 2 + panY}px, 0) scale(${zoom})`;
       standButtons.forEach((button) => {
-        const r = button.getBoundingClientRect();
-        button.classList.toggle('label-visible', r.width >= button.textContent!.length * 6 + 4 && r.height >= 14);
+        const width = parseFloat(button.style.width) / 100 * bounds.w * fit * zoom;
+        const height = parseFloat(button.style.height) / 100 * bounds.h * fit * zoom;
+        button.style.fontSize = `${10 / zoom}px`;
+        button.classList.toggle('label-visible', width >= button.textContent!.length * 6 + 4 && height >= 14);
       });
+    };
+    const scheduleRender = () => {
+      if (!renderFrame) renderFrame = requestAnimationFrame(() => { renderFrame = 0; render(); });
     };
     const reset = () => {
       fit = Math.min((viewport.clientWidth - 24) / bounds.w, (viewport.clientHeight - 24) / bounds.h);
       zoom = 1; panX = panY = 0; render();
     };
-    const changeZoom = (value: number) => { zoom = Math.max(1, Math.min(8, value)); render(); };
+    const changeZoom = (value: number, anchor?: { x: number; y: number }) => {
+      const next = Math.max(1, Math.min(8, value));
+      if (anchor) {
+        const ratio = next / zoom;
+        panX = anchor.x - viewport.clientWidth / 2 - (anchor.x - viewport.clientWidth / 2 - panX) * ratio;
+        panY = anchor.y - viewport.clientHeight / 2 - (anchor.y - viewport.clientHeight / 2 - panY) * ratio;
+      }
+      zoom = next;
+      scheduleRender();
+    };
+    const pinch = () => {
+      const [a, b] = [...pointers.values()];
+      const rect = viewport.getBoundingClientRect();
+      return { distance: Math.hypot(a.x - b.x, a.y - b.y), center: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top } };
+    };
     const tools = el('div', 'map-tools');
     for (const [label, action] of [['+', () => changeZoom(zoom * 1.4)], ['−', () => changeZoom(zoom / 1.4)], ['Toàn khu', reset]] as const) {
       const button = el('button', undefined, label);
@@ -317,9 +337,15 @@ export class Hud {
       tools.append(button);
     }
     viewport.addEventListener('pointerdown', (e) => {
+      if ((e.target as HTMLElement).closest('.map-tools')) return;
       if (pointers.size === 0) dragged = false;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      gestureDistance = 0;
+      if (pointers.size === 2) {
+        dragged = true;
+        const gesture = pinch();
+        gestureDistance = gesture.distance;
+        gestureCenter = gesture.center;
+      }
     });
     viewport.addEventListener('pointermove', (e) => {
       const previous = pointers.get(e.pointerId);
@@ -330,19 +356,28 @@ export class Hud {
       viewport.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 2) {
-        const [a, b] = [...pointers.values()];
-        const distance = Math.hypot(a.x - b.x, a.y - b.y);
-        if (gestureDistance > 0) changeZoom(zoom * distance / gestureDistance);
-        gestureDistance = distance;
-      } else { panX += dx; panY += dy; render(); }
+        const gesture = pinch();
+        if (gestureDistance > 0 && gestureCenter) {
+          changeZoom(zoom * gesture.distance / gestureDistance, gestureCenter);
+          panX += gesture.center.x - gestureCenter.x;
+          panY += gesture.center.y - gestureCenter.y;
+        }
+        gestureDistance = gesture.distance;
+        gestureCenter = gesture.center;
+        scheduleRender();
+      } else { panX += dx; panY += dy; scheduleRender(); }
     });
-    const release = (e: PointerEvent) => { pointers.delete(e.pointerId); gestureDistance = 0; };
+    const release = (e: PointerEvent) => { pointers.delete(e.pointerId); gestureDistance = 0; gestureCenter = null; };
     viewport.addEventListener('pointerup', release);
     viewport.addEventListener('pointercancel', release);
     viewport.addEventListener('lostpointercapture', release);
-    viewport.addEventListener('wheel', (e) => { e.preventDefault(); changeZoom(zoom * Math.exp(-e.deltaY * 0.002)); }, { passive: false });
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      changeZoom(zoom * Math.exp(-e.deltaY * 0.002), { x: e.clientX - rect.left, y: e.clientY - rect.top });
+    }, { passive: false });
     viewport.append(surface, tools, el('div', 'map-compass', 'N ↑'));
-    this.mapModal.append(mapHeader, mapHint, viewport, selection);
+    this.mapModal.append(mapHeader, viewport, selection);
     mapButton.addEventListener('click', () => {
       this.settings.hidden = true;
       results.innerHTML = '';
@@ -355,7 +390,13 @@ export class Hud {
       reset();
     });
     window.addEventListener('resize', () => { if (this.mapModal.open) reset(); });
-    this.mapModal.addEventListener('close', () => pointers.clear());
+    this.mapModal.addEventListener('close', () => {
+      pointers.clear();
+      cancelAnimationFrame(renderFrame);
+      renderFrame = 0;
+      gestureDistance = 0;
+      gestureCenter = null;
+    });
     this.mapModal.addEventListener('click', (e) => {
       if (e.target === this.mapModal) this.mapModal.close();
     });

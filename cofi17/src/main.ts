@@ -23,7 +23,14 @@ async function loadData(): Promise<EventMapData> {
   const url = import.meta.env.VITE_MAP_URL as string | undefined;
   if (url) {
     try {
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 8000);
+      let res: Response;
+      try {
+        res = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (res.ok) return (await res.json()) as EventMapData;
     } catch (err) {
       console.warn('Live map unavailable, using the bundled snapshot.', err);
@@ -104,7 +111,7 @@ async function main() {
     }
   };
   // Warm the detail chunk as soon as the visitor shows intent.
-  const prefetch = () => void import('./experience');
+  const prefetch = () => void import('./experience').catch(() => { /* Start retries and reports failures. */ });
   document.getElementById('start-btn')?.addEventListener('pointerenter', prefetch, { once: true });
   document.getElementById('start-btn')?.addEventListener('focus', prefetch, { once: true });
 

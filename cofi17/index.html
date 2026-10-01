@@ -55,6 +55,36 @@
         <button type="button" onclick="location.reload()">Tải lại</button>
       </div>
     </div>
+    <script>
+      // This runs before module imports, so a failed import cannot leave loading stuck forever.
+      (function () {
+        var button = document.getElementById('start-btn');
+        var panel = document.getElementById('start');
+        var note = panel.querySelector('.start-error');
+        function fail(detail) {
+          if (panel.classList.contains('ready') || panel.classList.contains('error')) return;
+          panel.classList.add('error');
+          button.disabled = false;
+          button.textContent = 'Tải lại bản đồ';
+          note.hidden = false;
+          note.textContent = detail;
+          button.onclick = function () { location.reload(); };
+        }
+        window.addEventListener('error', function (event) {
+          if (event.target && event.target.tagName === 'SCRIPT') {
+            fail('Không tải được mã bản đồ. Kiểm tra kết nối và bấm tải lại.');
+          } else if (event.message) {
+            fail('Trình duyệt không khởi tạo được bản đồ: ' + event.message);
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function (event) {
+          fail('Không khởi tạo được bản đồ: ' + (event.reason && event.reason.message || String(event.reason)));
+        });
+        setTimeout(function () {
+          fail('Tải bản đồ quá lâu. Kiểm tra kết nối hoặc mở trang bằng Safari/Chrome, rồi bấm tải lại.');
+        }, 30000);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

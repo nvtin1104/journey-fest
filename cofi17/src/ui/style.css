@@ -1027,3 +1027,13 @@ button { touch-action: manipulation; }
   }
   .card.show { transform:translateX(-50%); }
 }
+
+.rotate-hint { position:fixed; left:50%; bottom:max(10px,env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:45; max-width:calc(100vw - 24px); padding:8px 12px; border:1px solid #b7cbd7; border-radius:12px; background:#fffffff2; color:#233746; font:600 11px system-ui; cursor:pointer; }
+.rotate-hint[hidden] { display:none; }
+
+.map-surface { will-change:transform; }
+.map-modal { gap:6px; padding:10px; }
+.map-modal .loc-header h2 { font-size:14px; }
+.map-modal .map-close { min-height:32px; padding:5px 10px; font-size:12px; }
+.map-selection { min-height:36px; }
+.map-navigate { min-height:36px; padding:6px 10px; font-size:12px; }

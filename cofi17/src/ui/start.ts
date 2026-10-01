@@ -1,5 +1,6 @@
 import type { Gender } from '../player/avatar';
 import { loadPref, savePref } from './prefs';
+import { prepareMobileLandscape } from './orientation';
 
 export interface StartScreen {
   /** Map shell is on screen: enable the Start button. */
@@ -32,6 +33,7 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
   const start = () => {
     if (started || button.disabled) return;
     started = true;
+    prepareMobileLandscape();
     savePref('gender', gender);
     panel.classList.add('loading');
     for (const p of picks) p.disabled = true;
