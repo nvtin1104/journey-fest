@@ -6,6 +6,8 @@ import type { ParsedMap, Stand } from '../map/parse';
 import { wallRect } from '../map/walls';
 import { WALL_T } from '../map/parse';
 import { standFront } from '../scene/booths';
+import { createBoothDetails } from '../booth/C17-C18/details';
+import { boothConfig } from '../booth/C17-C18/config';
 import {
   makeIcon,
   Compass,
@@ -597,6 +599,9 @@ export class Hud {
 
     head.append(closeBtn);
     this.card.append(head);
+    if (s.id === boothConfig.id) {
+      this.card.append(createBoothDetails(s));
+    }
 
     // Groups
     if (s.groups.length) {

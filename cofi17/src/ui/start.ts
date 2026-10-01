@@ -59,7 +59,9 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
       panel.classList.add('ready');
       // Returning visitors keep their saved character and resume directly after the map is ready.
       // New visitors still choose a character and explicitly start the tour.
-      if (hasSavedGender) start();
+      // Mobile fullscreen/orientation lock needs an explicit user gesture.
+      const touchDevice = navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+      if (hasSavedGender && !touchDevice) start();
     },
     progress: (fraction, label) => {
       bar.style.width = `${Math.round(fraction * 100)}%`;

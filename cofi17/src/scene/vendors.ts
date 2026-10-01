@@ -9,6 +9,7 @@ import { facingAngle, toWorldX, toWorldZ, worldRect, type Rect } from '../map/co
 import { Instancer } from './instancer';
 import { toonUnique, unitBox } from './materials';
 import { standFront, standMatrix, standSize } from './booths';
+import { FEATURED_STAND_ID } from '../booth/C17-C18/component';
 
 /** Depth (m) of a pavilion's display tables, and the gap a seller keeps from them. */
 const PAVILION_TABLE_DEPTH = 0.7;
@@ -199,6 +200,7 @@ export function buildVendors(stands: Stand[], map?: ParsedMap, pathfinder?: Path
   };
 
   for (const stand of stands) {
+    if (stand.id === FEATURED_STAND_ID) continue;
     const local = vendorBoothPosition(stand);
     if (!local) continue;
     const styleIndex = vendorStyleIndex(stand.id);

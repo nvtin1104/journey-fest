@@ -1,3 +1,4 @@
+import { openSampleViewer } from './booth/C17-C18/viewer';
 /**
  * Everything that only matters once the visitor presses "Start": detailed stands and signs,
  * the character, controls and the HUD. Loaded as a separate chunk so the start screen appears fast.
@@ -17,6 +18,7 @@ import { buildStands, standFront, standSize } from './scene/booths';
 import { NavigationVisualizer } from './scene/navigation';
 import { buildEntrancePosters } from './scene/posters';
 import { buildVendors } from './scene/vendors';
+import { buildBoothSample, FEATURED_STAND_ID } from './booth/C17-C18/component';
 import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
 import { FONT, SignAtlas } from './scene/signAtlas';
@@ -70,6 +72,9 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   detail.add(buildStands(map, atlas));
   const vendors = buildVendors(map.stands, map, pathfinder, world);
   detail.add(vendors.group);
+  const featuredStand = map.stands.find((stand) => stand.id === FEATURED_STAND_ID);
+  const boothSample = featuredStand ? buildBoothSample(featuredStand) : null;
+  if (boothSample) detail.add(boothSample.group);
   let focusedVendorId: string | null = null;
 
   o.onProgress(0.5, 'Đang dựng khu vực…');
@@ -356,6 +361,13 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
+    if (boothSample) {
+      const sampleHit = raycaster.intersectObjects(boothSample.targets, false)[0];
+      if (sampleHit) {
+        openSampleViewer(String(sampleHit.object.userData.sampleUrl));
+        return;
+      }
+    }
     const posterHit = raycaster.intersectObjects(entrancePosters.targets)[0];
     if (posterHit) {
       walkingRoute = [];
@@ -472,6 +484,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     player.update(dt, follow.forward());
     areas.update(t);
     vendors.update(t, follow.isInspecting() ? focusedVendorId : null);
+    boothSample?.update(t);
     navigation.update(t);
 
     if (t - lastProbe > 0.1) {
@@ -528,3 +541,4 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   return { player, update };
 }
+

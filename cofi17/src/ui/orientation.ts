@@ -10,9 +10,12 @@ export function prepareMobileLandscape() {
   const sync = () => {
     hint.hidden = window.innerWidth > window.innerHeight;
   };
+  let requesting = false;
   const request = async () => {
+    if (requesting) return;
     const orientation = screen.orientation as unknown as { lock?: (value: string) => Promise<void> } | undefined;
     if (typeof orientation?.lock !== 'function') { sync(); return; }
+    requesting = true;
     try {
       if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
@@ -20,6 +23,8 @@ export function prepareMobileLandscape() {
       await orientation.lock('landscape');
     } catch {
       // A portrait fallback keeps the map usable on browsers that deny orientation lock.
+    } finally {
+      requesting = false;
     }
     sync();
   };
@@ -27,6 +32,9 @@ export function prepareMobileLandscape() {
   document.body.append(hint);
   window.addEventListener('resize', sync);
   window.addEventListener('orientationchange', sync);
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) void request();
+  });
   sync();
   void request();
 }
