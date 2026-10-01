@@ -4,7 +4,7 @@ import type { CollisionWorld } from '../map/colliders';
 import type { Avatar } from './avatar';
 
 /** Turn rate (rad/s) for A/D or the joystick's x axis in focus mode. */
-const TURN_SPEED = 2.6;
+
 
 const lerpAngle = (a: number, b: number, t: number) => {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
@@ -16,14 +16,11 @@ const lerpAngle = (a: number, b: number, t: number) => {
  * Keyboard / joystick / tap-to-move locomotion with circle-vs-box collision.
  *
  * - Free camera: input is relative to the camera (W walks away from the camera).
- * - Focus mode: W/S walk along the character's heading and A/D turn it, so a camera that
- *   follows the heading always looks where the character is going.
  */
 export class PlayerController {
   readonly position = new THREE.Vector3();
   heading = 0;
   speed = 0;
-  focus = false;
   private velocity = new THREE.Vector2();
   private keys = new Set<string>();
   /** Virtual joystick input, x = right, y = forward, magnitude ≤ 1. */
@@ -64,6 +61,11 @@ export class PlayerController {
     this.sync(0);
   }
 
+  stopWalking() {
+    this.moveTarget = null;
+    this.velocity.set(0, 0);
+  }
+
   walkTo(x: number, z: number) {
     this.moveTarget = { x, z };
     this.stuckTime = 0;
@@ -87,16 +89,7 @@ export class PlayerController {
     let speed = 0;
     let faceMovement = true;
 
-    if (this.focus) {
-      // Tank-style: turn with x, walk along the heading with y (backwards is slower and keeps facing forward).
-      this.heading -= input.x * TURN_SPEED * dt;
-      if (Math.abs(input.y) > 0.05) {
-        dx = Math.sin(this.heading) * Math.sign(input.y);
-        dz = Math.cos(this.heading) * Math.sign(input.y);
-        speed = (input.run && input.y > 0 ? PLAYER.runSpeed : PLAYER.walkSpeed) * Math.abs(input.y) * (input.y < 0 ? 0.6 : 1);
-        faceMovement = false;
-      }
-    } else {
+    {
       const mag = Math.min(1, Math.hypot(input.x, input.y));
       if (mag > 0.05) {
         const right = { x: -forward.z, z: forward.x };

@@ -9,7 +9,6 @@ import { standFront } from '../scene/booths';
 import {
   makeIcon,
   Compass,
-  Navigation,
   MapPin,
   X,
   Eye,
@@ -28,13 +27,13 @@ export interface HudCallbacks {
   onMinimapClick: (mapX: number, mapY: number) => void;
   onToggleOverview: () => void;
   onGoEntrance: () => void;
-  onToggleFocus: () => void;
   onSelectCharacter: (gender: Gender) => void;
   onSelectQuality: (mode: QualityMode) => void;
   onJoystick: (x: number, y: number) => void;
   onSetLocation: (x: number, z: number, heading?: number, label?: string) => void;
   onStartNavigation: (s: Stand) => void;
   onCancelNavigation: () => void;
+  onBeginWalking: () => void;
   onTeleportToStand: (s: Stand) => void;
   onToggleCameraTarget: () => void;
 }
@@ -58,15 +57,20 @@ export function normalize(s: string) {
 }
 
 export function searchStands(stands: Stand[], query: string, limit = 8): Stand[] {
-  const q = normalize(query);
+  const q = normalize(query).replace(/^gian(?:\s+hang)?\s+/i, '').replace(/^([a-z]+)\s*0*(\d+)$/, '$1$2');
   if (!q) return [];
   const scored: Array<{ s: Stand; score: number }> = [];
   for (const s of stands) {
     const code = normalize(s.code);
-    const codes = code.split('–');
+    const codes = code.split(/[–—-]/).map((c) => c.trim().replace(/^([a-z]+)0*(\d+)$/, '$1$2'));
+    const range = codes.map((c) => /^([a-z]+)(\d+)$/.exec(c));
+    const requested = /^([a-z]+)(\d+)$/.exec(q);
+    const inRange = requested && range.length === 2 && range[0] && range[1]
+      && requested[1] === range[0][1] && requested[1] === range[1][1]
+      && Number(requested[2]) >= Number(range[0][2]) && Number(requested[2]) <= Number(range[1][2]);
     const name = normalize(s.name);
     let score = -1;
-    if (codes.includes(q)) score = 0;
+    if (codes.includes(q) || inRange) score = 0;
     else if (code.startsWith(q)) score = 1;
     else if (name.startsWith(q)) score = 2;
     else if (name.includes(q)) score = 3;
@@ -93,7 +97,8 @@ export class Hud {
   private minimapBase: HTMLCanvasElement;
   private mmScale = 1;
   private overviewBtn: HTMLButtonElement;
-  private focusBtn: HTMLButtonElement;
+  private mapModal: HTMLDialogElement;
+  private expandedMap: HTMLCanvasElement;
   private rotateBtn: HTMLButtonElement;
   private settings: HTMLElement;
   private genderBtns = new Map<Gender, HTMLButtonElement>();
@@ -128,11 +133,13 @@ export class Hud {
     const search = el('div', 'search');
     const input = el('input');
     input.type = 'search';
-    input.placeholder = 'Tìm gian hàng: mã (A15) hoặc tên…';
+    input.placeholder = 'Tìm mã hoặc tên gian…';
     input.setAttribute('aria-label', 'Tìm gian hàng');
     const results = el('ul', 'results');
     search.append(input, results);
-    top.append(brand, search);
+    const searchMapBar = el('div', 'search-map-bar');
+    searchMapBar.append(search);
+    top.append(brand, searchMapBar);
 
     const pick = (s: Stand) => {
       results.innerHTML = '';
@@ -142,7 +149,7 @@ export class Hud {
     };
     input.addEventListener('input', () => {
       results.innerHTML = '';
-      for (const s of searchStands(this.map.stands, input.value)) {
+      for (const s of searchStands(this.map.stands, input.value, 6)) {
         const li = el('li');
         const chip = el('span', 'chip', s.code || '•');
         chip.style.background = s.color;
@@ -177,23 +184,19 @@ export class Hud {
 
     // Nút Về lối vào
     const entrance = el('button', undefined);
-    entrance.append(makeIcon(DoorOpen, 14), document.createTextNode(' Lối vào'));
+    entrance.append(makeIcon(DoorOpen, 14), el('span', 'button-label', 'Lối vào'));
     entrance.title = 'Về lối vào khu Check-in';
+    entrance.setAttribute('aria-label', entrance.title);
     entrance.addEventListener('click', () => {
       this.currentOriginLabel = 'Lối vào Check-in';
       this.cb.onGoEntrance();
     });
 
-    // Nút Theo hướng đi
-    this.focusBtn = el('button', undefined);
-    this.updateFocusBtnText();
-    this.focusBtn.title = 'Camera luôn nhìn theo hướng nhân vật đi';
-    this.focusBtn.addEventListener('click', () => this.cb.onToggleFocus());
-
     // Nút Xoay màn hình (Mobile & Desktop)
     this.rotateBtn = el('button', undefined);
-    this.rotateBtn.append(makeIcon(RotateCw, 14), document.createTextNode(' Xoay'));
+    this.rotateBtn.append(makeIcon(RotateCw, 14), el('span', 'button-label', 'Xoay'));
     this.rotateBtn.title = 'Xoay màn hình ngang/dọc';
+    this.rotateBtn.setAttribute('aria-label', this.rotateBtn.title);
     this.rotateBtn.addEventListener('click', () => this.toggleOrientation());
 
     // Nút Cài đặt
@@ -201,7 +204,7 @@ export class Hud {
     gear.append(makeIcon(Settings, 15));
     gear.title = 'Cài đặt: nhân vật, chất lượng đồ hoạ';
     gear.setAttribute('aria-label', 'Cài đặt');
-    buttons.append(this.overviewBtn, entrance, this.focusBtn, this.rotateBtn, gear);
+    buttons.append(this.overviewBtn, entrance, this.rotateBtn, gear);
 
     // Settings popover: character and graphics quality.
     this.settings = el('div', 'settings');
@@ -236,12 +239,125 @@ export class Hud {
     });
     side.append(this.minimap, buttons, this.settings);
 
-    // Minimap click
-    this.minimap.addEventListener('click', (e) => {
-      const r = this.minimap.getBoundingClientRect();
-      const px = ((e.clientX - r.left) / r.width) * this.minimap.width;
-      const py = ((e.clientY - r.top) / r.height) * this.minimap.height;
-      this.cb.onMinimapClick(this.map.bounds.x + px / this.mmScale, this.map.bounds.y + py / this.mmScale);
+    const mapButton = el('button', 'map-launch');
+    mapButton.setAttribute('aria-label', 'Mở bản đồ toàn khu');
+    mapButton.append(this.minimap, el('span', undefined, 'Mở bản đồ'));
+    side.prepend(mapButton);
+    this.mapModal = el('dialog', 'map-modal');
+    const mapHeader = el('div', 'loc-header');
+    const mapTitle = el('h2', undefined, 'Bản đồ toàn khu');
+    mapTitle.id = 'map-modal-title';
+    this.mapModal.setAttribute('aria-labelledby', mapTitle.id);
+    const closeMap = el('button', 'map-close', 'Đóng');
+    closeMap.addEventListener('click', () => this.mapModal.close());
+    mapHeader.append(mapTitle, closeMap);
+    const mapHint = el('p', 'map-hint', 'Kéo để di chuyển · Chụm hai ngón để phóng to · Chọn gian để đánh dấu');
+    const viewport = el('div', 'map-scroll');
+    const surface = el('div', 'map-surface');
+    this.expandedMap = el('canvas', 'expanded-map');
+    surface.append(this.expandedMap);
+    const selection = el('div', 'map-selection');
+    const selectedLabel = el('span', undefined, 'Chọn gian hàng trên bản đồ');
+    const navigate = el('button', 'map-navigate', 'Chỉ đường');
+    navigate.disabled = true;
+    let selected: Stand | null = null;
+    navigate.addEventListener('click', () => {
+      if (!selected) return;
+      this.mapModal.close();
+      this.cb.onStartNavigation(selected);
+      this.hideStand();
+    });
+    selection.append(selectedLabel, navigate);
+    const bounds = this.map.bounds;
+    const standButtons: HTMLButtonElement[] = [];
+    for (const stand of this.map.stands) {
+      const button = el('button', 'map-stand', stand.code || stand.name);
+      const r = stand.rect;
+      button.style.left = `${100 * (r.x - bounds.x) / bounds.w}%`;
+      button.style.top = `${100 * (r.y - bounds.y) / bounds.h}%`;
+      button.style.width = `${100 * r.w / bounds.w}%`;
+      button.style.height = `${100 * r.h / bounds.h}%`;
+      button.title = `${stand.code} ${stand.name}`;
+      button.setAttribute('aria-label', button.title);
+      button.addEventListener('click', () => {
+        if (dragged) return;
+        selected = stand;
+        selectedLabel.textContent = button.title;
+        navigate.disabled = false;
+        standButtons.forEach((b) => b.classList.toggle('selected', b === button));
+      });
+      standButtons.push(button);
+      surface.append(button);
+    }
+    let zoom = 1, panX = 0, panY = 0, fit = 1, dragged = false;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let gestureDistance = 0;
+    const render = () => {
+      const width = bounds.w * fit * zoom, height = bounds.h * fit * zoom;
+      panX = Math.max(-Math.max(0, (width - viewport.clientWidth) / 2), Math.min(Math.max(0, (width - viewport.clientWidth) / 2), panX));
+      panY = Math.max(-Math.max(0, (height - viewport.clientHeight) / 2), Math.min(Math.max(0, (height - viewport.clientHeight) / 2), panY));
+      surface.style.width = `${width}px`;
+      surface.style.height = `${height}px`;
+      surface.style.transform = `translate(${(viewport.clientWidth - width) / 2 + panX}px, ${(viewport.clientHeight - height) / 2 + panY}px)`;
+      standButtons.forEach((button) => {
+        const r = button.getBoundingClientRect();
+        button.classList.toggle('label-visible', r.width >= button.textContent!.length * 6 + 4 && r.height >= 14);
+      });
+    };
+    const reset = () => {
+      fit = Math.min((viewport.clientWidth - 24) / bounds.w, (viewport.clientHeight - 24) / bounds.h);
+      zoom = 1; panX = panY = 0; render();
+    };
+    const changeZoom = (value: number) => { zoom = Math.max(1, Math.min(8, value)); render(); };
+    const tools = el('div', 'map-tools');
+    for (const [label, action] of [['+', () => changeZoom(zoom * 1.4)], ['−', () => changeZoom(zoom / 1.4)], ['Toàn khu', reset]] as const) {
+      const button = el('button', undefined, label);
+      button.setAttribute('aria-label', label === '+' ? 'Phóng to' : label === '−' ? 'Thu nhỏ' : label);
+      button.addEventListener('click', action);
+      tools.append(button);
+    }
+    viewport.addEventListener('pointerdown', (e) => {
+      if (pointers.size === 0) dragged = false;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      gestureDistance = 0;
+    });
+    viewport.addEventListener('pointermove', (e) => {
+      const previous = pointers.get(e.pointerId);
+      if (!previous) return;
+      const dx = e.clientX - previous.x, dy = e.clientY - previous.y;
+      if (!dragged && Math.hypot(dx, dy) < 4 && pointers.size === 1) return;
+      dragged = true;
+      viewport.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (gestureDistance > 0) changeZoom(zoom * distance / gestureDistance);
+        gestureDistance = distance;
+      } else { panX += dx; panY += dy; render(); }
+    });
+    const release = (e: PointerEvent) => { pointers.delete(e.pointerId); gestureDistance = 0; };
+    viewport.addEventListener('pointerup', release);
+    viewport.addEventListener('pointercancel', release);
+    viewport.addEventListener('lostpointercapture', release);
+    viewport.addEventListener('wheel', (e) => { e.preventDefault(); changeZoom(zoom * Math.exp(-e.deltaY * 0.002)); }, { passive: false });
+    viewport.append(surface, tools, el('div', 'map-compass', 'N ↑'));
+    this.mapModal.append(mapHeader, mapHint, viewport, selection);
+    mapButton.addEventListener('click', () => {
+      this.settings.hidden = true;
+      results.innerHTML = '';
+      input.blur();
+      this.cb.onJoystick(0, 0);
+      this.expandedMap.width = this.minimap.width;
+      this.expandedMap.height = this.minimap.height;
+      this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
+      this.mapModal.showModal();
+      reset();
+    });
+    window.addEventListener('resize', () => { if (this.mapModal.open) reset(); });
+    this.mapModal.addEventListener('close', () => pointers.clear());
+    this.mapModal.addEventListener('click', (e) => {
+      if (e.target === this.mapModal) this.mapModal.close();
     });
 
     // Booth info card.
@@ -251,7 +367,7 @@ export class Hud {
 
     // Controls help (Desktop only)
     this.help = el('div', 'help');
-    this.renderHelp(false);
+    this.renderHelp();
 
     // Mobile mini pill khi đứng trước gian (không bung toang cả card che joystick)
     this.mobileStandPill = el('div', 'mobile-stand-pill');
@@ -283,6 +399,7 @@ export class Hud {
       this.mobileStandPill,
       this.navBottomPanel,
       this.locationModal,
+      this.mapModal,
       this.toastEl,
     );
 
@@ -291,31 +408,21 @@ export class Hud {
     // Lắng nghe resize / orientationchange
     window.addEventListener('resize', () => {
       this.drawMinimapBase();
-      this.renderHelp(this.focusBtn.classList.contains('active'));
+      this.renderHelp();
     });
   }
 
   private updateOverviewBtnText(on: boolean) {
     this.overviewBtn.innerHTML = '';
+    this.overviewBtn.title = on ? 'Quay lại nhân vật' : 'Xem toàn cảnh';
+    this.overviewBtn.setAttribute('aria-label', this.overviewBtn.title);
+    this.overviewBtn.setAttribute('aria-pressed', String(on));
     const labelText = on ? (this.isMobile ? 'Quay lại' : 'Quay lại (M)') : (this.isMobile ? 'Toàn cảnh' : 'Toàn cảnh (M)');
-    this.overviewBtn.append(makeIcon(Compass, 14), document.createTextNode(` ${labelText}`));
+    this.overviewBtn.append(makeIcon(Compass, 14), el('span', 'button-label', labelText));
   }
 
-  private updateFocusBtnText() {
-    this.focusBtn.innerHTML = '';
-    const labelText = this.isMobile ? 'Theo hướng đi' : 'Theo hướng đi (F)';
-    this.focusBtn.append(makeIcon(Navigation, 14), document.createTextNode(` ${labelText}`));
-  }
-
-  private renderHelp(focus: boolean) {
-    const move = focus ? 'W / S: đi tới, lùi · A / D: xoay' : 'WASD / ← ↑ → ↓: đi';
-    this.help.innerHTML =
-      `<b>Điều khiển</b><br>${move} · Shift: chạy<br>E: xem chi tiết gian · Kéo chuột: xoay<br>Bấm lên sàn: đi tới đó · M: toàn cảnh · F: theo hướng`;
-  }
-
-  setFocus(on: boolean) {
-    this.focusBtn.classList.toggle('active', on);
-    this.renderHelp(on);
+  private renderHelp() {
+    this.help.innerHTML = '<b>Điều khiển</b><br>WASD / ← ↑ → ↓: đi · Shift: chạy<br>E: xem gian · Kéo: xoay · Cuộn / chụm hai ngón: thu phóng<br>Chạm sàn: đi tới · M: toàn cảnh';
   }
 
   setGender(gender: Gender) {
@@ -492,7 +599,11 @@ export class Hud {
         this.cb.onCancelNavigation();
       });
 
-      navActions.append(viewBtn, stopBtn);
+      const beginBtn = el('button', 'act-begin', 'Bắt đầu đi');
+      beginBtn.addEventListener('click', () => {
+        this.cb.onBeginWalking();
+      });
+      navActions.append(beginBtn, viewBtn, stopBtn);
       navBox.append(navHead, navOrigin, navActions);
       this.card.append(navBox);
     } else {
@@ -703,12 +814,18 @@ export class Hud {
 
     // Search booth input
     const searchInput = el('input', 'loc-search');
-    searchInput.placeholder = 'Tìm gian hàng bạn đang đứng (vd: A15, D5)...';
+    searchInput.type = 'search';
+    searchInput.setAttribute('aria-label', 'Tìm gian bạn đang đứng');
+    searchInput.placeholder = 'Nhập mã hoặc tên gian (A15, D5)…';
     const resultsList = el('ul', 'loc-results');
 
     const renderResults = (query: string) => {
       resultsList.innerHTML = '';
-      const list = searchStands(this.map.stands, query, 12);
+      const list = query.trim() ? searchStands(this.map.stands, query, 8)
+        : this.currentNearbyStand ? [this.currentNearbyStand] : [];
+      if (!list.length) {
+        resultsList.append(el('li', 'loc-empty', query.trim() ? 'Không tìm thấy gian. Thử mã hoặc tên khác.' : 'Nhập mã gian bạn đang đứng để tìm vị trí.'));
+      }
       for (const s of list) {
         const li = el('li');
         const chip = el('span', 'chip', s.code || '•');
@@ -730,10 +847,15 @@ export class Hud {
       renderResults(searchInput.value);
     });
 
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') resultsList.querySelector<HTMLElement>('li:not(.loc-empty)')?.click();
+      if (e.key === 'Escape') modal.hidden = true;
+    });
+
     const hint = el('p', 'loc-hint');
     hint.append(
       makeIcon(Sparkles, 14),
-      document.createTextNode(' Bạn cũng có thể bấm trực tiếp lên bản đồ con (minimap) để chọn điểm đi tới.')
+      document.createTextNode(' Nhập mã gian, chọn kết quả để đặt điểm xuất phát.')
     );
 
     card.append(header, desc, presetsDiv, searchInput, resultsList, hint);
@@ -762,6 +884,7 @@ export class Hud {
       input.focus();
       const list = this.locationModal.querySelector('.loc-results');
       if (list) list.innerHTML = '';
+      input.dispatchEvent(new Event('input'));
     }
   }
 
@@ -797,9 +920,10 @@ export class Hud {
     const knob = el('div', 'knob');
     pad.append(knob);
     let active: number | null = null;
-    const R = 48;
+
     const set = (e: PointerEvent) => {
       const r = pad.getBoundingClientRect();
+      const R = (r.width - knob.offsetWidth) / 2;
       let x = e.clientX - (r.left + r.width / 2);
       let y = e.clientY - (r.top + r.height / 2);
       const len = Math.hypot(x, y);
@@ -811,6 +935,8 @@ export class Hud {
       this.cb.onJoystick(x / R, -y / R);
     };
     pad.addEventListener('pointerdown', (e) => {
+      if (active !== null) return;
+      e.preventDefault();
       active = e.pointerId;
       pad.setPointerCapture(e.pointerId);
       set(e);
@@ -824,6 +950,12 @@ export class Hud {
     };
     pad.addEventListener('pointerup', end);
     pad.addEventListener('pointercancel', end);
+    pad.addEventListener('lostpointercapture', end);
+    window.addEventListener('blur', () => {
+      active = null;
+      knob.style.transform = '';
+      this.cb.onJoystick(0, 0);
+    });
     return pad;
   }
 
@@ -832,15 +964,15 @@ export class Hud {
     const isSmall = window.innerWidth <= 640 || (window.innerHeight <= 500 && window.innerWidth > window.innerHeight);
     const size = isSmall ? 160 : 240;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.mmScale = (size * dpr) / Math.max(b.w, b.h);
+    this.mmScale = (1600 * dpr) / Math.max(b.w, b.h);
     const w = Math.round(b.w * this.mmScale);
     const h = Math.round(b.h * this.mmScale);
     for (const c of [this.minimap, this.minimapBase]) {
       c.width = w;
       c.height = h;
     }
-    this.minimap.style.width = `${w / dpr}px`;
-    this.minimap.style.height = `${h / dpr}px`;
+    this.minimap.style.width = `${size * b.w / Math.max(b.w, b.h)}px`;
+    this.minimap.style.height = `${size * b.h / Math.max(b.w, b.h)}px`;
 
     const ctx = this.minimapBase.getContext('2d')!;
     const R = (r: Rect, color: string) => {
@@ -880,8 +1012,12 @@ export class Hud {
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
-      ctx.strokeStyle = '#00c8f8';
-      ctx.lineWidth = 4;
+      const routeWidth = Math.max(8, this.minimap.width / 65);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = routeWidth + routeWidth * 0.7;
+      ctx.stroke();
+      ctx.strokeStyle = '#007de3';
+      ctx.lineWidth = routeWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.stroke();
@@ -891,11 +1027,11 @@ export class Hud {
       const lx = (toMapX(last.x) - b.x) * this.mmScale;
       const ly = (toMapY(last.z) - b.y) * this.mmScale;
       ctx.beginPath();
-      ctx.arc(lx, ly, 5, 0, Math.PI * 2);
+      ctx.arc(lx, ly, this.minimap.width / 80, 0, Math.PI * 2);
       ctx.fillStyle = '#ff4f9a';
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = this.minimap.width / 320;
       ctx.stroke();
 
       ctx.restore();
@@ -920,5 +1056,6 @@ export class Hud {
     ctx.stroke();
     ctx.fill();
     ctx.restore();
+    if (this.mapModal.open) this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
   }
 }

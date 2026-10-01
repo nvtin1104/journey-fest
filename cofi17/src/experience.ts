@@ -19,7 +19,7 @@ import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
 import { FONT, SignAtlas } from './scene/signAtlas';
 import { Hud, normalize } from './ui/hud';
-import { loadPref, savePref } from './ui/prefs';
+import { savePref } from './ui/prefs';
 
 export interface ExperienceOptions {
   map: ParsedMap;
@@ -136,7 +136,25 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     navigation.setPath(activeRoute);
   };
 
+  let walkingRoute: Point2D[] = [];
+
+  const beginWalking = () => {
+    if (!activeDestination) return;
+    updateRoute(true);
+    if (activeRoute.length < 2) {
+      hud.showToast("Không tìm được đường đi từ vị trí này");
+      return;
+    }
+    walkingRoute = activeRoute.slice(1).map((point) => ({ ...point }));
+    leaveOverview();
+    follow.skipIntro();
+    follow.stopInspect();
+    hud.hideStand();
+  };
+
   const startNavigation = (s: Stand) => {
+    walkingRoute = [];
+    player.stopWalking();
     activeDestination = s;
     updateRoute(true);
     const p = standFront(s);
@@ -146,6 +164,8 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   };
 
   const cancelNavigation = () => {
+    walkingRoute = [];
+    player.stopWalking();
     activeDestination = null;
     activeRoute = [];
     navigation.clear();
@@ -158,6 +178,8 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
    * Automatically sets up guidance route from the visitor's current location to the booth.
    */
   const selectStandFromSearch = (s: Stand) => {
+    walkingRoute = [];
+    player.stopWalking();
     const p = standFront(s);
     const { cx, cz } = worldRect(s.rect);
     const standCenter = new THREE.Vector3(cx, 1.4, cz);
@@ -193,6 +215,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   /** User location setting (from "Vị trí của tôi" modal or "Tôi đang ở đây" button) */
   const setPlayerLocation = (x: number, z: number, heading = 0, label?: string) => {
+    walkingRoute = [];
     player.teleport(x, z, heading);
     leaveOverview();
     follow.snapBehind(heading + Math.PI);
@@ -231,13 +254,6 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     hud.setOverview(on);
   };
 
-  const setFocus = (on: boolean) => {
-    player.focus = on;
-    follow.setFocus(on, player.heading);
-    hud.setFocus(on);
-    savePref('focus', on ? '1' : '0');
-  };
-
   let gender = o.gender;
   const selectCharacter = (g: Gender) => {
     if (g === gender) return;
@@ -253,7 +269,6 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const hud = new Hud(o.hudRoot, map, {
     onSelectStand: selectStandFromSearch,
     onToggleOverview: toggleOverview,
-    onToggleFocus: () => setFocus(!player.focus),
     onSelectCharacter: selectCharacter,
     onSelectQuality: (mode) => {
       o.quality.setMode(mode);
@@ -291,6 +306,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     onSetLocation: setPlayerLocation,
     onStartNavigation: startNavigation,
     onCancelNavigation: cancelNavigation,
+    onBeginWalking: beginWalking,
     onTeleportToStand: teleportToStand,
     onToggleCameraTarget: toggleCameraTarget,
   });
@@ -298,7 +314,6 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   hud.setGender(gender);
   hud.setQuality(o.quality.mode, o.quality.level);
   o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
-  setFocus(loadPref('focus') === '1');
 
   // Interactive booths for detection & tapping
   const interactive = map.stands.filter((s) => s.kind !== 'foodcourt');
@@ -331,15 +346,15 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     } else {
       follow.skipIntro();
       if (follow.isInspecting()) follow.stopInspect();
+      walkingRoute = [];
       player.walkTo(hit.x, hit.z);
     }
   };
 
-  // Keyboard controls: Escape to close, M for overview, F for focus, E to view stand details
+  // Keyboard controls: Escape to close, M for overview, E to view stand details
   window.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
     if (e.code === 'KeyM') toggleOverview();
-    else if (e.code === 'KeyF') setFocus(!player.focus);
     else if (e.code === 'KeyE') {
       const cur = hud.getCurrentNearbyStand();
       if (cur) {
@@ -402,9 +417,12 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   const update = (dt: number, t: number) => {
     if (player.hasInput) {
+      walkingRoute = [];
       follow.skipIntro();
       if (follow.isInspecting()) follow.stopInspect();
     }
+    while (walkingRoute.length && Math.hypot(walkingRoute[0].x - player.position.x, walkingRoute[0].z - player.position.z) < 0.35) walkingRoute.shift();
+    if (walkingRoute.length) player.walkTo(walkingRoute[0].x, walkingRoute[0].z);
     player.update(dt, follow.forward());
     areas.update(t);
     navigation.update(t);
@@ -457,7 +475,6 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     setPlayerLocation,
     startNavigation,
     cancelNavigation,
-    setFocus,
     switchCharacter,
   });
 

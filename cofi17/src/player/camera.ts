@@ -27,8 +27,6 @@ const lerpAngle = (a: number, b: number, t: number) => {
  */
 export class FollowCamera {
   mode: 'follow' | 'overview' = 'follow';
-  /** Focus mode: the camera swings behind the character so it looks where the character walks. */
-  focus = false;
   /** Slow turntable spin of the overview (the start screen). */
   showcase = false;
   yaw = 0;
@@ -47,7 +45,6 @@ export class FollowCamera {
   private pinchStart = 0;
   private dragStart: { x: number; y: number } | null = null;
   private dragged = false;
-  private lastDrag = -Infinity;
   private clock = 0;
 
   /** Called with client coordinates when the canvas is tapped/clicked without dragging. */
@@ -177,7 +174,6 @@ export class FollowCamera {
     if (this.dragStart && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) > 6) this.dragged = true;
     if (!this.dragged) return;
     this.targetYaw -= dx * 0.006;
-    this.lastDrag = this.clock;
     this.targetPitch = THREE.MathUtils.clamp(this.targetPitch + dy * 0.004, 0.08, 1.4);
     this.rate = Math.max(this.rate, 6);
   };
@@ -210,20 +206,9 @@ export class FollowCamera {
     return { x: -Math.sin(this.yaw), z: -Math.cos(this.yaw) };
   }
 
-  setFocus(on: boolean, heading: number) {
-    this.focus = on;
-    if (on) this.targetYaw = heading + Math.PI;
-  }
-
-  /** `heading` is the visitor's facing (radians), used by focus mode. */
-  update(dt: number, player: THREE.Vector3, heading = 0) {
+  update(dt: number, player: THREE.Vector3, _heading = 0) {
     this.clock += dt;
     if (this.showcase) this.targetYaw += dt * 0.05;
-    // Focus mode keeps the camera behind the heading, except right after the user dragged it.
-    if (this.focus && this.mode === 'follow' && this.clock - this.lastDrag > 1.5) {
-      this.targetYaw = heading + Math.PI;
-      this.rate = Math.max(this.rate, 4);
-    }
     const k = 1 - Math.exp(-this.rate * dt);
     const goal = this.mode === 'overview'
       ? this.overviewCenter
