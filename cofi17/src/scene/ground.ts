@@ -119,6 +119,21 @@ export function buildGround(map: ParsedMap): THREE.Group {
     group.add(mesh);
   }
 
+  // Parking bays: light asphalt and white markings, with a clear middle aisle.
+  const parkingTex = patternTexture(256, (ctx, size) => {
+    ctx.fillStyle = '#a7b4bf'; ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#f9fbff'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(size * 0.3, 0);
+    ctx.lineTo(size * 0.3, size); ctx.lineTo(0, size);
+    ctx.moveTo(size, 0); ctx.lineTo(size * 0.7, 0);
+    ctx.lineTo(size * 0.7, size); ctx.lineTo(size, size); ctx.stroke();
+  });
+  for (const g of map.grounds.filter((g) => g.kind === 'parking')) {
+    const texture = parkingTex.clone();
+    texture.repeat.set(1, g.rect.h / 120);
+    group.add(plane(g.rect, LAYER.sidewalk, floorMaterial('#ffffff', texture, 1)));
+  }
+
   // Sidewalks: sage paving tiles.
   const tileTex = patternTexture(128, (ctx, s) => {
     ctx.fillStyle = '#ffffff';

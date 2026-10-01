@@ -112,6 +112,7 @@ export class Hud {
 
   // Thanh chỉ đường ở dưới (Bottom Navigation Panel)
   private navBottomPanel: HTMLElement;
+  private itemFocused = false;
   private currentOriginLabel = 'Vị trí hiện tại';
   private activeNavInfo: { destination: Stand; distance: number; isInspecting: boolean } | null = null;
   private currentCardNavState = false;
@@ -129,7 +130,7 @@ export class Hud {
     // Brand + search.
     const top = el('div', 'hud-top');
     const brand = el('div', 'brand');
-    brand.innerHTML = '<span class="dot"></span><b>Color Fiesta</b><span>Bản đồ 3D</span>';
+    brand.innerHTML = '<img class="site-logo" src="/logo.svg" alt="Color Fiesta Wonderland" /><span>Bản đồ 3D</span>';
     const search = el('div', 'search');
     const input = el('input');
     input.type = 'search';
@@ -492,7 +493,7 @@ export class Hud {
   updateNearbyStand(s: Stand | null, isInspecting = false) {
     this.currentNearbyStand = s;
 
-    if (s && !this.isCardVisible()) {
+    if (s && !this.isCardVisible() && !this.itemFocused) {
       this.mobileStandPill.style.display = 'flex';
       this.mobileStandPill.innerHTML = '';
       const icon = makeIcon(MapPin, 14);
@@ -526,7 +527,7 @@ export class Hud {
     this.card.classList.remove('show');
     this.currentCardStand = null;
     this.currentCardNavState = false;
-    if (this.activeNavInfo) {
+    if (this.activeNavInfo && !this.itemFocused) {
       // Khi đóng card mà vẫn đang dẫn đường, hiện thanh bottom panel để người dùng điều khiển
       this.navBottomPanel.style.display = 'flex';
       this.updateOrRenderNavBottomPanel(this.activeNavInfo);
@@ -683,6 +684,17 @@ export class Hud {
    * Thanh điều hướng chỉ đường được đặt ở DƯỚI màn hình (khi card đóng).
    * Không bao giờ chồng lên UI detail của gian hàng.
    */
+  setItemFocused(on: boolean) {
+    this.itemFocused = on;
+    if (on) {
+      this.hideStand();
+      this.navBottomPanel.style.display = 'none';
+      this.mobileStandPill.style.display = 'none';
+    } else {
+      this.setNavigation(this.activeNavInfo);
+    }
+  }
+
   setNavigation(info: { destination: Stand; distance: number; isInspecting: boolean } | null) {
     this.activeNavInfo = info;
     if (!info) {
@@ -690,6 +702,11 @@ export class Hud {
       if (this.isCardVisible() && this.currentCardStand && this.currentCardNavState) {
         this.showStand(this.currentCardStand, true);
       }
+      return;
+    }
+
+    if (this.itemFocused) {
+      this.navBottomPanel.style.display = 'none';
       return;
     }
 
@@ -720,7 +737,12 @@ export class Hud {
       distBadge.textContent = `${Math.round(info.distance)}m`;
       originText.textContent = this.currentOriginLabel;
       const code = info.destination.code || info.destination.name;
-      destText.innerHTML = `Đi đến <b>${code}</b>`;
+      if (destText.dataset.destination !== info.destination.id) {
+        this.renderNavBottomPanel(info);
+      } else {
+        const label = destText.querySelector('b');
+        if (label) label.textContent = code;
+      }
       return;
     }
 
@@ -751,6 +773,7 @@ export class Hud {
     const destInfo = el('div', 'nav-dest-info');
     const routeIcon = makeIcon(Route, 16, 'nav-dest-icon');
     const destText = el('span', 'nav-dest-text');
+    destText.dataset.destination = info.destination.id;
     const code = info.destination.code || info.destination.name;
     destText.innerHTML = `Đi đến <b>${code}</b>`;
     const distBadge = el('span', 'nav-dist', `${Math.round(info.distance)}m`);
@@ -1022,7 +1045,7 @@ export class Hud {
     };
     ctx.fillStyle = '#d4ecc9';
     ctx.fillRect(0, 0, w, h);
-    for (const g of this.map.grounds) R(g.rect, g.kind === 'road' ? '#8b8b96' : '#b9c9bd');
+    for (const g of this.map.grounds) R(g.rect, g.kind === 'road' ? '#8b8b96' : g.kind === 'parking' ? '#a7b4bf' : '#b9c9bd');
     for (const hall of this.map.halls) R(hall, hall.sealed ? '#d9cfee' : '#f7f1fe');
     for (const z of this.map.zones) R(z.rect, z.color);
     for (const r of this.map.rooms) R(r.rect, r.color);
@@ -1030,6 +1053,7 @@ export class Hud {
     for (const s of this.map.stages) R(s.rect, '#5d5a78');
     for (const wall of this.map.walls) R(wallRect(wall, WALL_T * 1.5), '#9d8fc4');
     for (const g of this.map.gates) R(g, '#38528f');
+    for (const car of this.map.props.filter((p) => p.kind === 'parked-car')) R(car.rect, '#466782');
     for (const p of this.map.signParts) R(p, '#4caf50');
   }
 
@@ -1078,10 +1102,25 @@ export class Hud {
       ctx.restore();
     }
 
+    // Hall and parking labels scale with the canvas, also visible in the full map.
+    ctx.save();
+    ctx.font = `700 ${this.minimap.width / 90}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#233746';
+    for (const hall of this.map.halls) {
+      if (hall.sealed) continue;
+      const name = hall.label?.split(' · ')[0];
+      if (name) ctx.fillText(name, (hall.x + hall.w / 2 - b.x) * this.mmScale, (hall.y + 70 - b.y) * this.mmScale);
+    }
+    for (const parking of this.map.grounds.filter((g) => g.kind === 'parking')) {
+      ctx.fillText('P · Bãi giữ xe', (parking.rect.x + parking.rect.w / 2 - b.x) * this.mmScale, (parking.rect.y + 40 - b.y) * this.mmScale);
+    }
+    ctx.restore();
+
     // Draw visitor marker
     const x = (toMapX(wx) - b.x) * this.mmScale;
     const y = (toMapY(wz) - b.y) * this.mmScale;
-    const s = 7 * (this.minimap.width / 240);
+    const s = Math.max(12, this.minimap.width / 100);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(-heading + Math.PI);

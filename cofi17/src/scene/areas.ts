@@ -83,6 +83,28 @@ export function buildAreas(map: ParsedMap, atlas: SignAtlas): AreasResult {
   const occluders: THREE.Mesh[] = [];
   const animated: Array<(t: number) => void> = [];
 
+  for (const hall of map.halls) {
+    if (!hall.label || hall.sealed) continue;
+    const { cx, cz, d } = worldRect(hall);
+    const label = makeLabel(hall.label, 1.25, { bg: '#38528f', fg: '#ffffff', size: 48 });
+    label.position.set(cx, WALL.height + 1, cz - d / 2 + 2);
+    group.add(label);
+  }
+  for (const parking of map.grounds.filter((g) => g.kind === 'parking')) {
+    const { cx, cz } = worldRect(parking.rect);
+    const label = makeLabel('P · BÃI GIỮ XE', 1.6, { bg: '#38528f', fg: '#ffffff', size: 48 });
+    label.position.set(cx, 3.5, cz);
+    group.add(label);
+  }
+  for (const [i, car] of map.props.filter((p) => p.kind === 'parked-car').entries()) {
+    const { cx, cz, w, d } = worldRect(car.rect);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, 0.8, d), toon(['#7d9ab8', '#eee8db', '#ab858c'][i % 3]));
+    body.position.set(cx, 0.55, cz); body.castShadow = true;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w * 0.85, 0.6, d * 0.55), toon('#465a70'));
+    roof.position.set(cx, 1.2, cz);
+    group.add(body, roof);
+  }
+
   // Closed back-of-house rooms, WCs and the VIP room: solid blocks with a door and a sign.
   // Bodies stay separate meshes (each fades on its own); roof caps and doors are instanced.
   const roomParts = new Instancer();

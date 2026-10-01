@@ -15,6 +15,7 @@ import { PlayerController } from './player/controller';
 import { buildAreas } from './scene/areas';
 import { buildStands, standFront, standSize } from './scene/booths';
 import { NavigationVisualizer } from './scene/navigation';
+import { buildEntrancePosters } from './scene/posters';
 import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
 import { FONT, SignAtlas } from './scene/signAtlas';
@@ -71,6 +72,18 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   await nextFrame();
   const areas = buildAreas(map, atlas);
   detail.add(areas.group);
+  const entrancePosters = buildEntrancePosters(map, (position, tabletop) => {
+    walkingRoute = [];
+    player.stopWalking();
+    hud.setItemFocused(true);
+    leaveOverview();
+    follow.skipIntro();
+    follow.inspectStand(position, 0, tabletop ? 3.5 : 4.5);
+  }, () => {
+    follow.stopInspect();
+    hud.setItemFocused(false);
+  });
+  detail.add(entrancePosters.group);
   occluders.push(...areas.occluders);
 
   // 3D Navigation path visualizer
@@ -153,6 +166,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   };
 
   const startNavigation = (s: Stand) => {
+    entrancePosters.close();
     walkingRoute = [];
     player.stopWalking();
     activeDestination = s;
@@ -178,6 +192,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
    * Automatically sets up guidance route from the visitor's current location to the booth.
    */
   const selectStandFromSearch = (s: Stand) => {
+    entrancePosters.close();
     walkingRoute = [];
     player.stopWalking();
     const p = standFront(s);
@@ -325,6 +340,13 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
+    const posterHit = raycaster.intersectObjects(entrancePosters.targets)[0];
+    if (posterHit) {
+      walkingRoute = [];
+      player.stopWalking();
+      entrancePosters.open(posterHit.object);
+      return;
+    }
 
     const hit = raycaster.ray.intersectPlane(floor, new THREE.Vector3());
     if (!hit) return;
@@ -356,6 +378,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
     if (e.code === 'KeyM') toggleOverview();
     else if (e.code === 'KeyE') {
+      if (entrancePosters.inspectNearby()) return;
       const cur = hud.getCurrentNearbyStand();
       if (cur) {
         if (hud.isCardVisible()) {
@@ -365,6 +388,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
         }
       }
     } else if (e.code === 'Escape') {
+      entrancePosters.close();
       if (hud.isCardVisible()) hud.hideStand();
       else if (follow.mode === 'overview') toggleOverview();
       else if (follow.isInspecting()) follow.stopInspect();
@@ -433,6 +457,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
       // Update nearby stand info (Desktop: show directly, Mobile: show tap pill)
       hud.updateNearbyStand(current, follow.isInspecting());
+      entrancePosters.update(player.position, player.hasInput, !!current || hud.isCardVisible() || follow.mode === 'overview');
 
       // Update active navigation state
       if (activeDestination) {

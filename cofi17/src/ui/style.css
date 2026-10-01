@@ -24,6 +24,8 @@ html, body {
 
 #hud { position: fixed; inset: 0; pointer-events: none; }
 #hud > * { pointer-events: auto; }
+/* Hidden cards must never intercept clicks on navigation or nearby item buttons. */
+#hud > .card:not(.show) { visibility: hidden; pointer-events: none; }
 
 .hud-top {
   position: absolute;
@@ -48,13 +50,6 @@ html, body {
 }
 .brand b { font-weight: 800; }
 .brand span:last-child { color: var(--muted); }
-.brand .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: conic-gradient(#ff8fd1, #ffe666, #9ed7ff, #b58cff, #ff8fd1);
-}
-
 .search { position: relative; }
 .search input {
   width: 100%;
@@ -275,13 +270,6 @@ html, body {
   font-weight: 700;
   color: var(--muted);
 }
-.start-brand .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: conic-gradient(#ff8fd1, #ffe666, #9ed7ff, #b58cff, #ff8fd1);
-}
-.start h1 { margin: 6px 0 4px; font-size: 24px; font-weight: 800; }
 .start p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 .gender { display: flex; gap: 10px; justify-content: center; margin-bottom: 14px; }
 .gender button {
@@ -382,7 +370,7 @@ button { touch-action: manipulation; }
   cursor: pointer;
   z-index: 10;
   white-space: nowrap;
-  animation: pillBounce 2s infinite ease-in-out;
+  animation: none;
 }
 .mobile-stand-pill .pill-hint {
   font-size: 11px;
@@ -392,10 +380,7 @@ button { touch-action: manipulation; }
   color: var(--accent);
   font-weight: 800;
 }
-@keyframes pillBounce {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-4px); }
-}
+
 
 /* Card action buttons and close button */
 .card-head { position: relative; }
@@ -1037,3 +1022,27 @@ button { touch-action: manipulation; }
 .map-modal .map-close { min-height:32px; padding:5px 10px; font-size:12px; }
 .map-selection { min-height:36px; }
 .map-navigate { min-height:36px; padding:6px 10px; font-size:12px; }
+
+.poster-modal { width:min(760px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); padding:10px; border:0; border-radius:14px; background:#f5f8fb; color:#233746; overflow:auto; }
+.poster-modal::backdrop { background:#101828b3; }
+.poster-header { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; margin-bottom:8px; }
+.poster-header button { flex:none; border:0; border-radius:8px; padding:8px 12px; background:#e3ebf1; color:#233746; cursor:pointer; }
+.poster-modal img { display:block; max-width:100%; width:auto; max-height:calc(100dvh - 132px); margin:auto; object-fit:contain; }
+
+.poster-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.poster-tabs button { flex:1; padding:8px; border:1px solid #b7cbd7; border-radius:8px; color:#233746; background:#e3ebf1; font:600 12px system-ui; cursor:pointer; }
+.poster-tabs button[aria-pressed='true'] { background:#007de3; color:white; border-color:#007de3; }
+
+.poster-tabs button[hidden] { display:none; }
+
+.poster-nearby[hidden] { display:none; }
+.poster-inspection .card-actions { margin-top:6px; padding-top:6px; }
+.poster-inspection .card-actions button { min-width:0; font-size:11px; padding:6px 8px; }
+
+.site-logo { display:block; width:100px; height:auto; object-fit:contain; }
+.start-brand .site-logo { width:108px; height:auto; max-height:44px; }
+@media (max-width:768px), (pointer:coarse) { .brand .site-logo { width:72px; } }
+
+.start .event-description { font-size:11px; line-height:1.5; margin:6px 0 10px; }
+
+.start-brand { gap:10px; margin-bottom:8px; }

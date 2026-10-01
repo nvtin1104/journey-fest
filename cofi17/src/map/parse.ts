@@ -17,6 +17,7 @@ export const AREA = {
   SIGN: 16,
   ZONE: 17,
   HIGHLIGHT: 18,
+  PARKING: 19,
 } as const;
 
 export type StandKind = 'booth' | 'stall' | 'pavilion' | 'foodcourt';
@@ -37,15 +38,15 @@ export interface Stand {
 export interface Room { id: string; label: string; rect: Rect; color: string; showLabel: boolean; facing: Facing }
 export interface Billboard { id: string; label: string; rect: Rect; color: string; facing: Facing }
 export interface Column { id: string; rect: Rect; decor: boolean }
-export interface Ground { id: string; kind: 'sidewalk' | 'road'; rect: Rect; color: string }
+export interface Ground { id: string; kind: 'sidewalk' | 'road' | 'parking'; rect: Rect; color: string }
 export interface Zone { id: string; label: string; rect: Rect; color: string }
 export interface Stage { id: string; rect: Rect; facing: Facing }
 export interface Highlight { id: string; rect: Rect; color: string }
-export interface Prop { kind: 'table' | 'checkin-desk'; rect: Rect; facing: Facing }
+export interface Prop { kind: 'table' | 'checkin-desk' | 'parked-car'; rect: Rect; facing: Facing }
 
 export interface ParsedMap {
   /** `sealed` halls have no door on any edge: they are drawn as closed, roofed buildings. */
-  halls: Array<Rect & { id: string; sealed: boolean }>;
+  halls: Array<Rect & { id: string; sealed: boolean; label?: string }>;
   gates: GateRect[];
   walls: WallSegment[];
   doors: Door[];
@@ -162,6 +163,7 @@ export function parseMap(data: EventMapData): ParsedMap {
       case AREA.GATE: gates.push({ id: n.id, ...r }); break;
       case AREA.SIDEWALK: grounds.push({ id: n.id, kind: 'sidewalk', rect: r, color: n.color }); break;
       case AREA.ROAD: roadsRaw.push(n); break;
+      case AREA.PARKING: grounds.push({ id: n.id, kind: 'parking', rect: r, color: n.color }); break;
       case AREA.SIGN: signParts.push(r); break;
       case AREA.ZONE: zones.push({ id: n.id, label: n.label, rect: r, color: n.color }); break;
       case AREA.HIGHLIGHT: highlights.push({ id: n.id, rect: r, color: n.color }); break;
@@ -207,11 +209,23 @@ export function parseMap(data: EventMapData): ParsedMap {
     d.axis === 'h'
       ? (d.at === h.y || d.at === h.y + h.h) && d.from >= h.x && d.to <= h.x + h.w
       : (d.at === h.x || d.at === h.x + h.w) && d.from >= h.y && d.to <= h.y + h.h;
-  const hallsOut = halls.map((h) => ({ ...h, sealed: !doors.some((d) => onEdge(h, d)) }));
+  const hallsOut = halls.map((h) => ({ ...h, label: data.nodes.find((n) => n.id === h.id)?.label, sealed: !doors.some((d) => onEdge(h, d)) }));
 
   const props: Prop[] = [];
   for (const s of standsRaw) if (s.kind === 'foodcourt') props.push(...foodCourtTables(s.rect));
   for (const z of zones) if (/check\s*-?\s*in/i.test(z.label)) props.push(...checkinDesks(z.rect, gates));
+
+  for (const parking of grounds.filter((g) => g.kind === 'parking')) {
+    // Occupied bays, leaving the central aisle and the pedestrian access clear.
+    for (let row = 0; row < 7; row++) {
+      for (const side of [0, 1]) {
+        if ((row + side) % 3 === 0) continue;
+        props.push({ kind: 'parked-car', facing: 'N', rect: {
+          x: parking.rect.x + 110 + side * 460, y: parking.rect.y + 80 + row * 120, w: 80, h: 100,
+        } });
+      }
+    }
+  }
 
   const standRects = standsRaw.map((s) => s.rect);
   const obstacles: Rect[] = [

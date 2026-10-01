@@ -25,11 +25,12 @@ describe('parseMap', () => {
 
   it('merges double booths that share a refId', () => {
     const a15 = byCode('A15')!;
-    expect(a15.code).toBe('A15–A16');
-    expect(a15.nodeIds).toHaveLength(2);
-    expect(a15.rect).toEqual({ x: 1410, y: -290, w: 100, h: 40 });
+    expect(a15.code).toBe('A15');
+    expect(a15.nodeIds).toHaveLength(1);
+    expect(a15.rect.w).toBe(40);
     expect(map.stands.filter((s) => s.code.includes('A16'))).toHaveLength(1);
-    expect(byCode('A7')!.code).toBe('A7–A8');
+    expect(byCode('A7')!.code).toBe('A7');
+    expect(byCode('F4')!.code).toBe('F4–F5');
   });
 
   it('classifies areas', () => {
@@ -41,7 +42,22 @@ describe('parseMap', () => {
     expect(map.billboards.map((b) => b.label)).toContain('ARTIST ALLEY MAP');
     expect(map.rooms.map((r) => r.label)).toEqual(expect.arrayContaining(['WC', 'VIP room', 'DEPOSITORY', 'ORGANIZER']));
     expect(map.columns.filter((c) => !c.decor)).toHaveLength(22);
-    expect(map.grounds.filter((g) => g.kind === 'road')).toHaveLength(3);
+    expect(map.grounds.filter((g) => g.kind === 'road')).toHaveLength(4);
+  });
+
+  it('includes the four named halls and a parking ground instead of a booth', () => {
+    expect(map.halls.filter((h) => !h.sealed).map((h) => h.label?.split(' · ')[0])).toEqual(['Hall A1', 'Hall A2', 'Hall A3', 'Hall A4']);
+    expect(map.grounds.find((g) => g.kind === 'parking')?.rect.x).toBeGreaterThan(3700);
+    expect(map.stands.some((s) => s.name === 'BÃI GIỮ XE')).toBe(false);
+    expect(map.props.some((p) => p.kind === 'parked-car')).toBe(true);
+  });
+
+  it('loads booth names from the published hall lists', () => {
+    expect(byCode('I10')?.name).toBe('After Midnight');
+    expect(byCode('N30')?.name).toBe('Nguyễn Sỹ Hải Thanh');
+    expect(byCode('S3')?.name).toBe('Kumodayne');
+    expect(byCode('R3')?.name).toBe('PNC BOOKSTORE');
+    expect(byCode('D38')?.name).toBe('Nghìn Năm Văn Vẻr');
   });
 
   it('attaches stamp rally groups', () => {
