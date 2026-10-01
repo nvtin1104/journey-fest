@@ -1104,7 +1104,7 @@ export class Hud {
       const ly = (toMapY(last.z) - b.y) * this.mmScale;
       ctx.beginPath();
       ctx.arc(lx, ly, this.minimap.width / 80, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff4f9a';
+      ctx.fillStyle = '#5b45c9';
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = this.minimap.width / 320;
@@ -1141,7 +1141,7 @@ export class Hud {
     ctx.lineTo(0, s * 0.45);
     ctx.lineTo(-s * 0.9, s);
     ctx.closePath();
-    ctx.fillStyle = '#ff4f9a';
+    ctx.fillStyle = '#5b45c9';
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = s * 0.35;
     ctx.stroke();
