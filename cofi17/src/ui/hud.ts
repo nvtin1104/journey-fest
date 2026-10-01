@@ -372,6 +372,15 @@ export class Hud {
     viewport.addEventListener('pointerup', release);
     viewport.addEventListener('pointercancel', release);
     viewport.addEventListener('lostpointercapture', release);
+    // Tapping an empty spot on the zoomed map jumps the view there (same as the old minimap click).
+    viewport.addEventListener('click', (e) => {
+      if (dragged || (e.target as HTMLElement).closest('.map-stand, .map-tools')) return;
+      const rect = surface.getBoundingClientRect();
+      const fx = (e.clientX - rect.left) / rect.width, fy = (e.clientY - rect.top) / rect.height;
+      if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+      this.mapModal.close();
+      this.cb.onMinimapClick(bounds.x + fx * bounds.w, bounds.y + fy * bounds.h);
+    });
     viewport.addEventListener('wheel', (e) => {
       e.preventDefault();
       const rect = viewport.getBoundingClientRect();
