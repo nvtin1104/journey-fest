@@ -127,9 +127,11 @@ export function buildGround(map: ParsedMap): THREE.Group {
   sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshToonMaterial({ map: sideTex, gradientMap: toonGradient() });
   const bottomMat = new THREE.MeshToonMaterial({ color: '#7d5f48', gradientMap: toonGradient() });
-  const topY = LAYER.grass - 0.005;
+  // The top face is covered by the lawn; drawing it only causes z-fighting with the grass plane.
+  const hiddenMat = new THREE.MeshBasicMaterial({ visible: false });
+  const topY = LAYER.grass;
   const slab = new THREE.Mesh(new THREE.BoxGeometry(baseW, BASE_DEPTH, baseD), [
-    sideMat, sideMat, bottomMat, bottomMat, sideMat, sideMat,
+    sideMat, sideMat, hiddenMat, bottomMat, sideMat, sideMat,
   ]);
   slab.position.set(b.cx, topY - BASE_DEPTH / 2, b.cz);
   slab.receiveShadow = true;
