@@ -67,6 +67,7 @@ export class PlayerController {
   }
 
   walkTo(x: number, z: number) {
+    if (this.moveTarget?.x === x && this.moveTarget?.z === z) return;
     this.moveTarget = { x, z };
     this.stuckTime = 0;
   }
@@ -111,7 +112,7 @@ export class PlayerController {
       } else {
         dx = tx / dist;
         dz = tz / dist;
-        speed = Math.min(dist > 12 ? PLAYER.runSpeed : PLAYER.walkSpeed, dist * 4);
+        speed = Math.min(PLAYER.walkSpeed * 1.25, dist * 6);
         faceMovement = true;
       }
     }

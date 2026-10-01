@@ -40,14 +40,14 @@ export function buildBoothSample(stand: Stand) {
   const sample = picture(sampleUrl, sampleSize, sampleSize);
   sample.name = 'c17-c18-sample';
   sample.userData.sampleUrl = sampleUrl;
-  sample.position.set(0, boardHeight / 2, boardZ + 0.035);
+  sample.position.set(W / 2 - sampleSize / 2 - 0.18, boardHeight / 2, boardZ + 0.035);
   group.add(sample);
   const tabletopSize = Math.min(0.42, depth - 0.28);
   const tabletopSample = picture(sampleUrl, tabletopSize, tabletopSize);
   tabletopSample.name = 'c17-c18-tabletop-sample';
   tabletopSample.userData.sampleUrl = sampleUrl;
   tabletopSample.rotation.x = -Math.PI / 2;
-  tabletopSample.position.set(-W / 2 + tabletopSize / 2 + 0.18, BOOTH.counterHeight + 0.014, counterZ);
+  tabletopSample.position.set(W / 2 - tabletopSize / 2 - 0.18, BOOTH.counterHeight + 0.014, counterZ);
   group.add(tabletopSample);
   const cat = createCat();
   group.add(cat.root);

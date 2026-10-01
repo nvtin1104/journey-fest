@@ -9,7 +9,7 @@ export function createBoothDetails(_stand: Stand): HTMLElement {
   button.type = 'button';
   button.className = 'booth-info-link';
   button.setAttribute('aria-label', 'Xem ảnh mẫu sản phẩm của gian C17–C18');
-  button.textContent = 'Xem sample';
+  button.textContent = 'Xả kho đi Úc';
   button.addEventListener('click', () => openSampleViewer());
   section.append(button);
   for (const link of boothConfig.links) {

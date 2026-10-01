@@ -21,7 +21,7 @@ export const PAVILION = { postHeight: 3.2, headerHeight: 0.7, floorHeight: 0.08 
 
 export const PLAYER = {
   radius: 0.35,
-  walkSpeed: 4.5,
+  walkSpeed: 6,
   runSpeed: 9,
 };
 

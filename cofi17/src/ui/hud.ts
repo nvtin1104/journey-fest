@@ -1,11 +1,11 @@
-import { toMapX, toMapY, toWorldX, toWorldZ, worldRect, type Rect } from '../map/coords';
-import { SPAWN } from '../config';
+import { toMapX, toMapY, type Rect } from '../map/coords';
+
 import type { Gender } from '../player/avatar';
 import { QUALITY, type QualityLevel, type QualityMode } from '../scene/quality';
 import type { ParsedMap, Stand } from '../map/parse';
 import { wallRect } from '../map/walls';
 import { WALL_T } from '../map/parse';
-import { standFront } from '../scene/booths';
+
 import { createBoothDetails } from '../booth/C17-C18/details';
 import { boothConfig } from '../booth/C17-C18/config';
 import {
@@ -17,7 +17,7 @@ import {
   User,
   DoorOpen,
   Sparkles,
-  Utensils,
+
   Settings,
   RotateCw,
   Check,
@@ -32,7 +32,7 @@ export interface HudCallbacks {
   onSelectCharacter: (gender: Gender) => void;
   onSelectQuality: (mode: QualityMode) => void;
   onJoystick: (x: number, y: number) => void;
-  onSetLocation: (x: number, z: number, heading?: number, label?: string) => void;
+
   onStartNavigation: (s: Stand) => void;
   onCancelNavigation: () => void;
   onBeginWalking: () => void;
@@ -599,6 +599,14 @@ export class Hud {
 
     head.append(closeBtn);
     this.card.append(head);
+    const teleport = el('button', 'booth-info-link', 'Teleport tới gian này');
+    teleport.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.cb.onTeleportToStand(s);
+      this.hideStand();
+      this.showToast(`Đã đến gian ${s.code || s.name}`);
+    });
+    this.card.append(teleport);
     if (s.id === boothConfig.id) {
       this.card.append(createBoothDetails(s));
     }
@@ -630,7 +638,7 @@ export class Hud {
       const originText = el('span');
       originText.innerHTML = `Xuất phát: <b>${this.currentOriginLabel}</b>`;
       const changeBtn = el('button', 'btn-change-origin');
-      changeBtn.append(makeIcon(MapPin, 13), document.createTextNode(' Đổi điểm xuất phát'));
+      changeBtn.append(makeIcon(MapPin, 13), document.createTextNode(' Teleport qua chi tiết'));
       changeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.openLocationModal('set-origin');
@@ -839,7 +847,7 @@ export class Hud {
     const card = el('div', 'location-card');
     const header = el('div', 'loc-header');
     const title = el('h2');
-    title.append(makeIcon(MapPin, 18), document.createTextNode(' Đặt vị trí của bạn'));
+    title.append(makeIcon(MapPin, 18), document.createTextNode(' Tìm gian để teleport'));
     const closeBtn = el('button', 'card-close');
     closeBtn.append(makeIcon(X, 16));
     closeBtn.addEventListener('click', () => {
@@ -847,51 +855,9 @@ export class Hud {
     });
     header.append(title, closeBtn);
 
-    const desc = el('p', 'card-sub', 'Chọn gian hàng hoặc khu vực bạn đang đứng để bắt đầu dẫn đường.');
+    const desc = el('p', 'card-sub', 'Chọn gian để xem chi tiết. Dùng nút Teleport trong chi tiết để di chuyển tới gian.');
 
-    // Presets
     const presetsDiv = el('div', 'loc-presets');
-
-    const spawnBtn = el('button');
-    spawnBtn.append(makeIcon(DoorOpen, 14), document.createTextNode(' Lối vào Check-in'));
-    spawnBtn.addEventListener('click', () => {
-      const spawnX = toWorldX(SPAWN.x);
-      const spawnZ = toWorldZ(SPAWN.y);
-      this.currentOriginLabel = 'Lối vào Check-in';
-      this.cb.onSetLocation(spawnX, spawnZ, Math.PI, 'Lối vào Check-in');
-      modal.hidden = true;
-      this.showToast('Đã chuyển vị trí về lối vào Check-in');
-    });
-    presetsDiv.append(spawnBtn);
-
-    if (this.map.stages.length > 0) {
-      const stage = this.map.stages[0];
-      const stageBtn = el('button');
-      stageBtn.append(makeIcon(Sparkles, 14), document.createTextNode(' Sân khấu chính'));
-      stageBtn.addEventListener('click', () => {
-        const { cx, cz } = worldRect(stage.rect);
-        this.currentOriginLabel = 'Sân khấu chính';
-        this.cb.onSetLocation(cx, cz + 3, 0, 'Sân khấu chính');
-        modal.hidden = true;
-        this.showToast('Đã chuyển vị trí về Sân khấu chính');
-      });
-      presetsDiv.append(stageBtn);
-    }
-
-    const foodcourt = this.map.stands.find((s) => s.kind === 'foodcourt');
-    if (foodcourt) {
-      const fcBtn = el('button');
-      fcBtn.append(makeIcon(Utensils, 14), document.createTextNode(' Khu ẩm thực'));
-      fcBtn.addEventListener('click', () => {
-        const { cx, cz } = worldRect(foodcourt.rect);
-        this.currentOriginLabel = 'Khu ẩm thực';
-        this.cb.onSetLocation(cx, cz, 0, 'Khu ẩm thực');
-        modal.hidden = true;
-        this.showToast('Đã chuyển vị trí về Khu ẩm thực');
-      });
-      presetsDiv.append(fcBtn);
-    }
-
     // Search booth input
     const searchInput = el('input', 'loc-search');
     searchInput.type = 'search';
@@ -912,12 +878,8 @@ export class Hud {
         chip.style.background = s.color;
         li.append(chip, el('span', 'name', s.name || s.code));
         li.addEventListener('click', () => {
-          const p = standFront(s);
-          const label = s.code ? `Gian ${s.code}` : s.name;
-          this.currentOriginLabel = label;
-          this.cb.onSetLocation(p.x, p.z, p.heading, s.code || s.name);
           modal.hidden = true;
-          this.showToast(`Đã chọn vị trí tại gian ${s.code || s.name}`);
+          this.cb.onSelectStand(s);
         });
         resultsList.append(li);
       }
@@ -935,7 +897,7 @@ export class Hud {
     const hint = el('p', 'loc-hint');
     hint.append(
       makeIcon(Sparkles, 14),
-      document.createTextNode(' Nhập mã gian, chọn kết quả để đặt điểm xuất phát.')
+      document.createTextNode(' Chọn gian rồi bấm Teleport trong chi tiết.')
     );
 
     card.append(header, desc, presetsDiv, searchInput, resultsList, hint);
@@ -955,7 +917,7 @@ export class Hud {
       titleEl.innerHTML = '';
       titleEl.append(
         makeIcon(MapPin, 18),
-        document.createTextNode(context === 'set-origin' ? ' Chọn gian bạn đang đứng' : ' Đặt vị trí của bạn')
+        document.createTextNode(context === 'set-origin' ? ' Tìm gian để teleport' : ' Tìm gian để teleport')
       );
     }
     const input = this.locationModal.querySelector<HTMLInputElement>('.loc-search');
@@ -1159,3 +1121,5 @@ export class Hud {
     this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
   }
 }
+
+

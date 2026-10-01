@@ -252,6 +252,8 @@ html, body {
   transition: opacity 0.5s;
 }
 .start.hide { opacity: 0; pointer-events: none; }
+.start { box-sizing:border-box; overflow-y:auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+.start .start-card { box-sizing:border-box; max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; flex-shrink:0; }
 .start-card {
   width: min(420px, 100%);
   padding: 20px 20px 16px;
@@ -1080,3 +1082,17 @@ button { touch-action: manipulation; }
 .booth-details .booth-info-link { flex:1; margin:0; border:0; font:600 13px inherit; cursor:pointer; }
 .sample-download { padding:8px 12px; border-radius:8px; color:#e6d28f; border:1px solid #8fa4e8; text-decoration:none; font-size:13px; white-space:nowrap; }
 .sample-download:focus-visible { outline:2px solid #e6d28f; outline-offset:2px; }
+
+/* Compact welcome card for phones in landscape and short browser windows. */
+@media (max-height: 520px) {
+  .start .start-card { width:min(360px,100%); padding:12px 14px 10px; border-radius:16px; }
+  .start .start-brand { margin-bottom:4px; gap:8px; font-size:11px; }
+  .start .start-brand .site-logo { width:88px; max-height:34px; }
+  .start .event-description { font-size:10px; line-height:1.35; margin:4px 0 6px; }
+  .start p { font-size:12px; line-height:1.35; margin-bottom:8px; }
+  .start .gender { gap:8px; margin-bottom:8px; }
+  .start .gender button { max-width:112px; gap:2px; padding:5px 6px; border-width:2px; border-radius:11px; font-size:12px; }
+  .start .gender button svg { width:40px; height:40px; }
+  .start #start-btn { padding:9px 12px; min-height:36px; border-radius:10px; font-size:13px; }
+  .start .progress { margin-top:6px; height:4px; }
+}

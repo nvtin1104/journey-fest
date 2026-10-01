@@ -27,7 +27,7 @@ export class Pathfinder {
 
     // Clearance around obstacles for avatar walking.
     // 0.22m gives good clearance while ensuring doors and tight aisles remain open.
-    const clearance = 0.22;
+    const clearance = 0.35;
     for (const b of world.boxes) {
       const gx0 = Math.max(0, Math.floor((b.minX - clearance - this.minX) / this.cellSize));
       const gx1 = Math.min(this.width - 1, Math.floor((b.maxX + clearance - this.minX) / this.cellSize));

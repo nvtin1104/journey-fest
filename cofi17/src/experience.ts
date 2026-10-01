@@ -227,6 +227,9 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   /** Fast travel directly to a booth */
   const teleportToStand = (s: Stand) => {
+    walkingRoute = [];
+    player.stopWalking();
+    follow.stopInspect();
     const p = standFront(s);
     player.teleport(p.x, p.z, p.heading);
     leaveOverview();
@@ -240,27 +243,6 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       updateRoute(true);
     }
     history.replaceState(null, '', `#${encodeURIComponent(s.code.split('–')[0] || s.name)}`);
-  };
-
-  /** User location setting (from "Vị trí của tôi" modal or "Tôi đang ở đây" button) */
-  const setPlayerLocation = (x: number, z: number, heading = 0, label?: string) => {
-    // A hash identifies a selected booth; once the visitor changes location it is stale.
-    history.replaceState(null, '', `${location.pathname}${location.search}`);
-    walkingRoute = [];
-    player.teleport(x, z, heading);
-    leaveOverview();
-    follow.snapBehind(heading + Math.PI);
-    follow.stopInspect();
-    focusedVendorId = null;
-    if (activeDestination) {
-      updateRoute(true);
-      const p = standFront(activeDestination);
-      const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
-      hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: false });
-    }
-    if (label) {
-      hud.showToast(`Đã chuyển vị trí về: ${label}`);
-    }
   };
 
   const toggleCameraTarget = () => {
@@ -309,7 +291,8 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       savePref('quality', mode);
     },
     onGoEntrance: () => {
-      setPlayerLocation(spawn.x, spawn.z, spawn.heading, 'Lối vào khu Check-in');
+      leaveOverview();
+      follow.inspectStand(new THREE.Vector3(spawn.x, 1.4, spawn.z), spawn.heading, 12);
     },
     onMinimapClick: (mx, my) => {
       // Kiểm tra xem click trúng gian hàng nào trong danh sách
@@ -339,7 +322,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
         focusedVendorId = null;
       }
     },
-    onSetLocation: setPlayerLocation,
+
     onStartNavigation: startNavigation,
     onCancelNavigation: cancelNavigation,
     onBeginWalking: beginWalking,
@@ -361,28 +344,27 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     const rect = renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
+    // Pick the nearest rendered surface, rather than projecting through the booth onto the floor.
+    const surfaceHit = raycaster.intersectObject(detail, true).find(hit => hit.object instanceof THREE.Mesh);
     if (boothSample) {
       const sampleHit = raycaster.intersectObjects(boothSample.targets, false)[0];
-      if (sampleHit) {
+      if (sampleHit && (!surfaceHit || sampleHit.distance <= surfaceHit.distance + 0.02)) {
         openSampleViewer(String(sampleHit.object.userData.sampleUrl));
         return;
       }
     }
     const posterHit = raycaster.intersectObjects(entrancePosters.targets)[0];
-    if (posterHit) {
+    if (posterHit && (!surfaceHit || posterHit.distance <= surfaceHit.distance + 0.02)) {
       walkingRoute = [];
       player.stopWalking();
       entrancePosters.open(posterHit.object);
       return;
     }
 
-    const hit = raycaster.ray.intersectPlane(floor, new THREE.Vector3());
-    if (!hit) return;
-
-    // Check if user tapped directly on a stand in 3D
-    const clickedStand = interactive.find((s) => {
+    const clickedStand = surfaceHit && interactive.find((s) => {
       const { cx: scx, cz: scz, w, d } = worldRect(s.rect);
-      return Math.abs(hit.x - scx) <= w / 2 + 0.4 && Math.abs(hit.z - scz) <= d / 2 + 0.4;
+      return Math.abs(surfaceHit.point.x - scx) <= w / 2 + 0.08
+        && Math.abs(surfaceHit.point.z - scz) <= d / 2 + 0.08;
     });
 
     if (clickedStand) {
@@ -390,15 +372,30 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       return;
     }
 
+    // A visible wall or other object must not turn into a click on the floor behind it.
+    if (surfaceHit && surfaceHit.point.y > 0.15) return;
+    const hit = raycaster.ray.intersectPlane(floor, new THREE.Vector3());
+    if (!hit) return;
+
     if (follow.mode === 'overview') {
-      player.teleport(hit.x, hit.z);
-      toggleOverview();
+      walkingRoute = [];
+      player.stopWalking();
+      follow.inspectStand(new THREE.Vector3(hit.x, 1.4, hit.z), player.heading, 12);
+      hud.setOverview(false);
     } else {
       follow.skipIntro();
       if (follow.isInspecting()) follow.stopInspect();
       focusedVendorId = null;
       walkingRoute = [];
-      player.walkTo(hit.x, hit.z);
+      player.stopWalking();
+      const free = world.nearestFree(hit.x, hit.z, 0.35);
+      if (!free) { hud.showToast('Không thể đi tới vị trí này'); return; }
+      const grid = pathfinder.toGrid(free.x, free.z);
+      const goal = pathfinder.nearestWalkable(grid.gx, grid.gz);
+      if (!goal) { hud.showToast('Không thể đi tới vị trí này'); return; }
+      const target = pathfinder.toWorld(goal.gx, goal.gz);
+      walkingRoute = pathfinder.findPath(player.position.x, player.position.z, target.x, target.z, false).slice(1);
+      if (!walkingRoute.length) hud.showToast('Không tìm thấy đường đi tới vị trí này');
     }
   };
 
@@ -533,7 +530,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     pathfinder,
     selectStandFromSearch,
     teleportToStand,
-    setPlayerLocation,
+
     startNavigation,
     cancelNavigation,
     switchCharacter,
@@ -541,4 +538,5 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   return { player, update };
 }
+
 
