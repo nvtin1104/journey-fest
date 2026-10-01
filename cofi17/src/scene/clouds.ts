@@ -17,7 +17,7 @@ function rng(seed: number) {
   };
 }
 
-/** Soft toon clouds drifting in a ring around the venue, some above it and some below the base. */
+/** Soft toon clouds drifting in a ring around the venue, floating high above the ground. */
 export function buildClouds(map: ParsedMap): Clouds {
   const b = worldRect(map.bounds);
   const rand = rng(17);
@@ -29,7 +29,7 @@ export function buildClouds(map: ParsedMap): Clouds {
     const r = ringR + rand() * 90;
     const cx = Math.cos(a) * r;
     const cz = Math.sin(a) * r;
-    const cy = -18 + rand() * 70;
+    const cy = 55 + rand() * 60;
     const size = 7 + rand() * 8;
     const n = 4 + Math.floor(rand() * 3);
     for (let k = 0; k < n; k++) {
