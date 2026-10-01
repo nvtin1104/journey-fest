@@ -3,6 +3,18 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { toon, toonUnique } from '../scene/materials';
 
 export type Gender = 'male' | 'female';
+export type HairStyle = 'spiky' | 'short' | 'long' | 'bob' | 'ponytail';
+
+export interface AvatarAppearance {
+  hairStyle?: HairStyle;
+  shirtStyle?: 'button-up' | 'tee';
+  hairColor?: string;
+  shirtColor?: string;
+  bottomsColor?: string;
+  /** Hide visitor-only gear such as the camera and neck strap. */
+  camera?: boolean;
+  pose?: 'standing' | 'seated';
+}
 
 export interface Avatar {
   root: THREE.Group;
@@ -10,6 +22,31 @@ export interface Avatar {
   /** Advances the walk cycle. `speed` in m/s. */
   animate: (dt: number, speed: number) => void;
   dispose: () => void;
+}
+
+/** Shared walk/idle pose used by the full player rig and batched crowd avatars. */
+export interface AvatarMotion {
+  moving: boolean;
+  amount: number;
+  swing: number;
+  bodyBob: number;
+  headTilt: number;
+  cameraSwing: number;
+  skirtSwing: number;
+}
+
+export function avatarMotion(phase: number, idle: number, speed: number, gender: Gender): AvatarMotion {
+  const moving = speed > 0.1;
+  const amount = Math.min(1, speed / 4.5);
+  return {
+    moving,
+    amount,
+    swing: Math.sin(phase) * (gender === 'female' ? 0.45 : 0.6) * amount,
+    bodyBob: moving ? Math.abs(Math.sin(phase)) * 0.045 * amount : Math.sin(idle * 2) * 0.008,
+    headTilt: moving ? Math.sin(phase) * 0.035 * amount : Math.sin(idle * 1.3) * 0.025,
+    cameraSwing: moving ? Math.sin(phase * 2) * 0.12 * amount : 0,
+    skirtSwing: Math.sin(phase) * 0.05 * amount,
+  };
 }
 
 const COLORS = {
@@ -109,9 +146,11 @@ function mergeStatic(group: THREE.Object3D) {
   }
   for (const b of buckets.values()) {
     const mesh = new THREE.Mesh(mergeGeometries(b.geos), b.material);
+    mesh.userData.vendorPart = group.name;
     mesh.castShadow = b.castShadow;
     if (b.hulls.length) {
       const hull = new THREE.Mesh(mergeGeometries(b.hulls), outline);
+      hull.userData.vendorPart = group.name;
       hull.castShadow = false;
       hull.raycast = () => {};
       mesh.add(hull);
@@ -130,12 +169,12 @@ function strap(a: THREE.Vector3, b: THREE.Vector3, width: number, color: string)
   return mesh;
 }
 
-function maleHair(head: THREE.Group) {
-  const c = COLORS.hairMale;
+function maleHair(head: THREE.Group, c: string, style: 'spiky' | 'short') {
   const cap = part(new THREE.SphereGeometry(0.2, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), c);
   cap.rotation.x = -0.25;
   cap.position.set(0, 0.015, -0.015);
   head.add(cap);
+  if (style === 'short') return;
   // Messy spikes around the crown and back.
   const spike = new THREE.ConeGeometry(0.055, 0.17, 6);
   const spikes: Array<[number, number, number]> = [];
@@ -160,20 +199,27 @@ function maleHair(head: THREE.Group) {
   }
 }
 
-function femaleHair(head: THREE.Group) {
-  const c = COLORS.hairFemale;
+function femaleHair(head: THREE.Group, c: string, style: 'long' | 'bob' | 'ponytail') {
   const cap = part(new THREE.SphereGeometry(0.205, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.52), c);
   cap.rotation.x = -0.32;
   cap.position.set(0, 0.01, -0.01);
   head.add(cap);
-  // Long hair down the back to the shoulder blades.
-  const back = part(new THREE.CapsuleGeometry(0.17, 0.3, 6, 16), c);
-  back.scale.set(1.05, 1, 0.55);
-  back.position.set(0, -0.2, -0.1);
-  head.add(back);
+  if (style === 'long') {
+    const back = part(new THREE.CapsuleGeometry(0.17, 0.3, 6, 16), c);
+    back.scale.set(1.05, 1, 0.55);
+    back.position.set(0, -0.2, -0.1);
+    head.add(back);
+  } else if (style === 'ponytail') {
+    const back = part(new THREE.CapsuleGeometry(0.09, 0.34, 5, 12), c);
+    back.position.set(0, -0.22, -0.16);
+    head.add(back);
+    const tie = part(new THREE.SphereGeometry(0.045, 10, 8), '#ff8fb8');
+    tie.position.set(0, 0.05, -0.19);
+    head.add(tie);
+  }
   // Side locks framing the face.
   for (const sx of [-1, 1]) {
-    const lock = part(new THREE.CapsuleGeometry(0.05, 0.22, 4, 10), c);
+    const lock = part(new THREE.CapsuleGeometry(0.05, style === 'bob' ? 0.1 : 0.22, 4, 10), c);
     lock.position.set(sx * 0.16, -0.1, 0.04);
     lock.rotation.z = sx * 0.12;
     head.add(lock);
@@ -223,23 +269,48 @@ function face(head: THREE.Group, gender: Gender) {
 }
 
 /** Visitor character in the style of the reference art: white shirt, camera on a neck strap, navy bottoms. */
-export function createAvatar(gender: Gender): Avatar {
+export function createAvatar(gender: Gender, appearance: AvatarAppearance = {}): Avatar {
   const root = new THREE.Group();
   root.name = `avatar-${gender}`;
   const body = new THREE.Group();
   root.add(body);
   const female = gender === 'female';
+  const shirtColor = appearance.shirtColor ?? COLORS.shirt;
+  const shirtStyle = appearance.shirtStyle ?? 'button-up';
+  const bottomsColor = appearance.bottomsColor ?? COLORS.navy;
+  const hairColor = appearance.hairColor ?? (female ? COLORS.hairFemale : COLORS.hairMale);
   const shoulder = female ? 0.175 : 0.195;
   const hipY = 0.84;
+  const seated = appearance.pose === 'seated';
+  const bodyRestY = seated ? -0.28 : 0;
+  body.name = 'body';
+  body.position.y = bodyRestY;
 
   // Legs: wide trousers (male) or slim legs under a long skirt (female). Pivot at the hip.
   const legs = [-1, 1].map((sx) => {
     const pivot = new THREE.Group();
-    pivot.position.set(sx * 0.085, hipY, 0);
+    pivot.name = sx < 0 ? 'leg-left' : 'leg-right';
+    pivot.position.set(sx * 0.085, seated ? 0.56 : hipY, 0);
+    if (seated) {
+      // Sit on the chair: thighs extend forward from the seat and the lower legs hang down.
+      const thigh = part(new THREE.CylinderGeometry(female ? 0.055 : 0.09, female ? 0.055 : 0.095, 0.42, 12), bottomsColor);
+      thigh.rotation.x = Math.PI / 2;
+      thigh.position.set(0, -0.06, 0.2);
+      pivot.add(thigh);
+      const shin = part(new THREE.CylinderGeometry(0.04, 0.045, 0.4, 12), female ? COLORS.skin : bottomsColor);
+      shin.position.set(0, -0.27, 0.39);
+      pivot.add(shin);
+      const shoe = part(new THREE.SphereGeometry(0.07, 14, 10), COLORS.shoe);
+      shoe.scale.set(1, 0.55, 1.5);
+      shoe.position.set(0, -0.49, 0.43);
+      pivot.add(shoe);
+      root.add(pivot);
+      return pivot;
+    }
     const legLen = 0.76;
     const leg = female
       ? part(new THREE.CylinderGeometry(0.04, 0.04, legLen, 10), COLORS.skin, { outline: false })
-      : part(new THREE.CylinderGeometry(0.08, 0.105, legLen, 14), COLORS.navy);
+      : part(new THREE.CylinderGeometry(0.08, 0.105, legLen, 14), bottomsColor);
     leg.position.y = -legLen / 2;
     pivot.add(leg);
     const shoe = part(new THREE.SphereGeometry(0.07, 14, 10), COLORS.shoe);
@@ -252,58 +323,65 @@ export function createAvatar(gender: Gender): Avatar {
 
   let skirt: THREE.Mesh | null = null;
   if (female) {
-    skirt = part(new THREE.CylinderGeometry(0.15, 0.27, 0.72, 24, 1, true), COLORS.navy);
+    skirt = part(new THREE.CylinderGeometry(0.15, 0.27, seated ? 0.42 : 0.72, 24, 1, true), bottomsColor);
     // Open cylinder: its own double-sided material so the shared navy material stays single-sided.
-    skirt.material = toonUnique(COLORS.navy, { side: THREE.DoubleSide });
+    skirt.material = toonUnique(bottomsColor, { side: THREE.DoubleSide });
     skirt.userData.keep = true; // animated separately
-    skirt.position.y = hipY - 0.33;
+    skirt.userData.vendorPart = 'skirt';
+    skirt.children.forEach((child) => { child.userData.vendorPart = 'skirt'; });
+    skirt.position.y = hipY - (seated ? 0.21 : 0.33);
     body.add(skirt);
-    const waist = part(new THREE.CylinderGeometry(0.15, 0.15, 0.06, 20), COLORS.navy);
+    const waist = part(new THREE.CylinderGeometry(0.15, 0.15, 0.06, 20), bottomsColor);
     waist.position.y = hipY + 0.03;
     body.add(waist);
   } else {
-    const hips = part(new THREE.CylinderGeometry(0.15, 0.17, 0.12, 20), COLORS.navy);
+    const hips = part(new THREE.CylinderGeometry(0.15, 0.17, 0.12, 20), bottomsColor);
     hips.position.y = hipY;
     body.add(hips);
   }
 
   // Shirt: rounded torso, untucked hem, stand collar and a button placket.
-  const torso = part(new THREE.CapsuleGeometry(female ? 0.14 : 0.155, 0.3, 8, 20), COLORS.shirt);
+  const torso = part(new THREE.CapsuleGeometry(female ? 0.14 : 0.155, 0.3, 8, 20), shirtColor);
   torso.scale.set(1, 1, 0.78);
   torso.position.y = 1.08;
   body.add(torso);
-  const hem = part(new THREE.CylinderGeometry(female ? 0.15 : 0.16, female ? 0.165 : 0.175, 0.14, 20), COLORS.shirt);
+  const hem = part(new THREE.CylinderGeometry(female ? 0.15 : 0.16, female ? 0.165 : 0.175, 0.14, 20), shirtColor);
   hem.scale.z = 0.82;
   hem.position.y = hipY + 0.1;
   body.add(hem);
-  const collar = part(new THREE.CylinderGeometry(0.062, 0.07, 0.05, 16), COLORS.shirt);
-  collar.position.y = 1.35;
-  body.add(collar);
-  for (let i = 0; i < 4; i++) {
-    const b = part(new THREE.SphereGeometry(0.011, 8, 6), '#b7ab96', { outline: false, shadow: false });
-    b.position.set(0.012, 1.3 - i * 0.1, 0.123 - Math.abs(i - 1.5) * 0.004);
-    body.add(b);
+  if (shirtStyle === 'button-up') {
+    const collar = part(new THREE.CylinderGeometry(0.062, 0.07, 0.05, 16), shirtColor);
+    collar.position.y = 1.35;
+    body.add(collar);
+    for (let i = 0; i < 4; i++) {
+      const b = part(new THREE.SphereGeometry(0.011, 8, 6), '#b7ab96', { outline: false, shadow: false });
+      b.position.set(0.012, 1.3 - i * 0.1, 0.123 - Math.abs(i - 1.5) * 0.004);
+      body.add(b);
+    }
   }
 
-  // Camera hanging on a neck strap.
-  const cam = new THREE.Group();
-  cam.position.set(-0.03, 1.07, 0.155);
-  const camBody = part(new THREE.BoxGeometry(0.15, 0.095, 0.065), COLORS.camera);
-  cam.add(camBody);
-  const lens = part(new THREE.CylinderGeometry(0.036, 0.036, 0.04, 18), COLORS.lens);
-  lens.rotation.x = Math.PI / 2;
-  lens.position.set(0.012, -0.004, 0.05);
-  cam.add(lens);
-  const top = part(new THREE.BoxGeometry(0.05, 0.02, 0.04), COLORS.camera, { outline: false });
-  top.position.set(-0.035, 0.055, 0);
-  cam.add(top);
-  body.add(cam);
-  for (const sx of [-1, 1]) {
-    body.add(strap(new THREE.Vector3(sx * 0.075, 1.35, 0.04), new THREE.Vector3(-0.03 + sx * 0.07, 1.08, 0.14), 0.022, COLORS.strap));
+  // Camera hanging on a visitor's neck strap.
+  const cam = appearance.camera === false ? null : new THREE.Group();
+  if (appearance.camera !== false) {
+    cam!.position.set(-0.03, 1.07, 0.155);
+    const camBody = part(new THREE.BoxGeometry(0.15, 0.095, 0.065), COLORS.camera);
+    cam!.add(camBody);
+    const lens = part(new THREE.CylinderGeometry(0.036, 0.036, 0.04, 18), COLORS.lens);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0.012, -0.004, 0.05);
+    cam!.add(lens);
+    const top = part(new THREE.BoxGeometry(0.05, 0.02, 0.04), COLORS.camera, { outline: false });
+    top.position.set(-0.035, 0.055, 0);
+    cam!.add(top);
+    body.add(cam!);
+    for (const sx of [-1, 1]) {
+      body.add(strap(new THREE.Vector3(sx * 0.075, 1.35, 0.04), new THREE.Vector3(-0.03 + sx * 0.07, 1.08, 0.14), 0.022, COLORS.strap));
+    }
   }
 
   // Head.
   const head = new THREE.Group();
+  head.name = 'head';
   head.position.y = 1.5;
   body.add(head);
   const neck = part(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 12), COLORS.skin, { outline: false });
@@ -313,21 +391,23 @@ export function createAvatar(gender: Gender): Avatar {
   skull.scale.set(1, 1.04, 0.96);
   head.add(skull);
   face(head, gender);
-  if (female) femaleHair(head);
-  else maleHair(head);
+  if (female) femaleHair(head, hairColor, appearance.hairStyle === 'bob' || appearance.hairStyle === 'ponytail' ? appearance.hairStyle : 'long');
+  else maleHair(head, hairColor, appearance.hairStyle === 'short' ? 'short' : 'spiky');
 
   // Arms: sleeve, cuff and hand, pivot at the shoulder.
   const arms = [-1, 1].map((sx) => {
     const pivot = new THREE.Group();
+    pivot.name = sx < 0 ? 'arm-left' : 'arm-right';
     pivot.position.set(sx * shoulder, 1.27, 0);
     pivot.rotation.z = sx * 0.1;
     if (female) {
-      const puff = part(new THREE.SphereGeometry(0.075, 14, 10), COLORS.shirt);
+      const puff = part(new THREE.SphereGeometry(0.075, 14, 10), shirtColor);
       puff.position.y = -0.02;
       pivot.add(puff);
     }
-    const sleeve = part(new THREE.CapsuleGeometry(0.052, 0.34, 6, 12), COLORS.shirt);
-    sleeve.position.y = -0.21;
+    const sleeveLength = shirtStyle === 'tee' ? 0.18 : 0.34;
+    const sleeve = part(new THREE.CapsuleGeometry(0.052, sleeveLength, 6, 12), shirtColor);
+    sleeve.position.y = shirtStyle === 'tee' ? -0.12 : -0.21;
     pivot.add(sleeve);
     const hand = part(new THREE.SphereGeometry(0.045, 12, 10), COLORS.skin);
     hand.position.y = -0.45;
@@ -336,7 +416,7 @@ export function createAvatar(gender: Gender): Avatar {
     return pivot;
   });
 
-  for (const g of [head, body, cam, ...arms, ...legs]) mergeStatic(g);
+  for (const g of [head, body, ...(cam ? [cam] : []), ...arms, ...legs]) mergeStatic(g);
 
   const blob = new THREE.Mesh(
     new THREE.PlaneGeometry(0.7, 0.7),
@@ -350,19 +430,17 @@ export function createAvatar(gender: Gender): Avatar {
   let phase = 0;
   let idle = 0;
   const animate = (dt: number, speed: number) => {
-    const moving = speed > 0.1;
-    const amount = Math.min(1, speed / 4.5);
-    phase += dt * (moving ? 4 + speed * 1.3 : 0);
+    phase += dt * (speed > 0.1 ? 4 + speed * 1.3 : 0);
     idle += dt;
-    const swing = Math.sin(phase) * (female ? 0.45 : 0.6) * amount;
-    legs[0].rotation.x = swing;
-    legs[1].rotation.x = -swing;
-    arms[0].rotation.x = -swing * 0.8;
-    arms[1].rotation.x = swing * 0.8;
-    body.position.y = moving ? Math.abs(Math.sin(phase)) * 0.045 * amount : Math.sin(idle * 2) * 0.008;
-    head.rotation.z = moving ? Math.sin(phase) * 0.035 * amount : Math.sin(idle * 1.3) * 0.025;
-    cam.rotation.x = moving ? Math.sin(phase * 2) * 0.12 * amount : 0;
-    if (skirt) skirt.rotation.z = Math.sin(phase) * 0.05 * amount;
+    const motion = avatarMotion(phase, idle, speed, gender);
+    legs[0].rotation.x = seated ? 0 : motion.swing;
+    legs[1].rotation.x = seated ? 0 : -motion.swing;
+    arms[0].rotation.x = -motion.swing * 0.8;
+    arms[1].rotation.x = motion.swing * 0.8;
+    body.position.y = bodyRestY + motion.bodyBob;
+    head.rotation.z = motion.headTilt;
+    if (cam) cam.rotation.x = motion.cameraSwing;
+    if (skirt) skirt.rotation.z = motion.skirtSwing;
   };
 
   const dispose = () => {

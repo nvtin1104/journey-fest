@@ -113,7 +113,7 @@ export class Pathfinder {
    * Computes smooth path from world (startX, startZ) to (endX, endZ).
    * Returns list of world waypoints including start and end points.
    */
-  findPath(startX: number, startZ: number, endX: number, endZ: number): Point2D[] {
+  findPath(startX: number, startZ: number, endX: number, endZ: number, allowDirectFallback = true): Point2D[] {
     const sGrid = this.toGrid(startX, startZ);
     const eGrid = this.toGrid(endX, endZ);
 
@@ -121,6 +121,7 @@ export class Pathfinder {
     const goal = this.nearestWalkable(eGrid.gx, eGrid.gz);
 
     if (!start || !goal) {
+      if (!allowDirectFallback) return [];
       console.log('Pathfinder failed: !start or !goal', { start, goal, sGrid, eGrid });
       // Fallback: direct line if no valid grid points found
       return [
@@ -263,6 +264,7 @@ export class Pathfinder {
     }
 
     if (!found) {
+      if (!allowDirectFallback) return [];
       console.warn('Pathfinder: no path found between points', { start, goal, iterations, heapLen: heap.length });
       return [
         { x: startX, z: startZ },

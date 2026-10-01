@@ -19,12 +19,19 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
   const panel = document.getElementById('start')!;
   const button = panel.querySelector<HTMLButtonElement>('#start-btn')!;
   const bar = panel.querySelector<HTMLElement>('.progress > div')!;
+  const instruction = panel.querySelector<HTMLElement>('.start-card > p:not(.event-description)');
   const picks = [...panel.querySelectorAll<HTMLButtonElement>('[data-gender]')];
 
-  let gender: Gender = loadPref('gender') === 'female' ? 'female' : 'male';
+  const savedGender = loadPref('gender');
+  const hasSavedGender = savedGender === 'male' || savedGender === 'female';
+  let gender: Gender = savedGender === 'female' ? 'female' : 'male';
   const select = (g: Gender) => {
     gender = g;
     for (const p of picks) p.setAttribute('aria-pressed', String(p.dataset.gender === g));
+    savePref('gender', gender);
+    if (hasSavedGender && instruction) {
+      instruction.textContent = `Đang dùng nhân vật ${gender === 'female' ? 'Nữ' : 'Nam'} đã lưu. Bạn có thể đổi nếu muốn.`;
+    }
   };
   select(gender);
   for (const p of picks) p.addEventListener('click', () => select(p.dataset.gender as Gender));
@@ -50,6 +57,9 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
       button.disabled = false;
       button.textContent = 'Bắt đầu tham quan';
       panel.classList.add('ready');
+      // Returning visitors keep their saved character and resume directly after the map is ready.
+      // New visitors still choose a character and explicitly start the tour.
+      if (hasSavedGender) start();
     },
     progress: (fraction, label) => {
       bar.style.width = `${Math.round(fraction * 100)}%`;

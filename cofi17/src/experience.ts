@@ -16,6 +16,7 @@ import { buildAreas } from './scene/areas';
 import { buildStands, standFront, standSize } from './scene/booths';
 import { NavigationVisualizer } from './scene/navigation';
 import { buildEntrancePosters } from './scene/posters';
+import { buildVendors } from './scene/vendors';
 import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
 import { FONT, SignAtlas } from './scene/signAtlas';
@@ -67,12 +68,16 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   const atlas = new SignAtlas(QUALITY[o.quality.level].signPxPerMeter);
   detail.add(buildStands(map, atlas));
+  const vendors = buildVendors(map.stands, map, pathfinder, world);
+  detail.add(vendors.group);
+  let focusedVendorId: string | null = null;
 
   o.onProgress(0.5, 'Đang dựng khu vực…');
   await nextFrame();
   const areas = buildAreas(map, atlas);
   detail.add(areas.group);
   const entrancePosters = buildEntrancePosters(map, (position, tabletop) => {
+    focusedVendorId = null;
     walkingRoute = [];
     player.stopWalking();
     hud.setItemFocused(true);
@@ -80,6 +85,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     follow.skipIntro();
     follow.inspectStand(position, 0, tabletop ? 3.5 : 4.5);
   }, () => {
+    focusedVendorId = null;
     follow.stopInspect();
     hud.setItemFocused(false);
   });
@@ -162,6 +168,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     leaveOverview();
     follow.skipIntro();
     follow.stopInspect();
+    focusedVendorId = null;
     hud.hideStand();
   };
 
@@ -202,6 +209,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     leaveOverview();
     follow.skipIntro();
     follow.inspectStand(standCenter, p.cameraYaw, 11);
+    focusedVendorId = s.id;
 
     activeDestination = s;
     updateRoute(true);
@@ -219,6 +227,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     leaveOverview();
     follow.skipIntro();
     follow.snapBehind(p.cameraYaw);
+    focusedVendorId = null;
     if (activeDestination === s) {
       cancelNavigation();
       hud.showToast(`Đã đến gian hàng ${s.code || s.name}`);
@@ -230,11 +239,14 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   /** User location setting (from "Vị trí của tôi" modal or "Tôi đang ở đây" button) */
   const setPlayerLocation = (x: number, z: number, heading = 0, label?: string) => {
+    // A hash identifies a selected booth; once the visitor changes location it is stale.
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
     walkingRoute = [];
     player.teleport(x, z, heading);
     leaveOverview();
     follow.snapBehind(heading + Math.PI);
     follow.stopInspect();
+    focusedVendorId = null;
     if (activeDestination) {
       updateRoute(true);
       const p = standFront(activeDestination);
@@ -249,6 +261,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const toggleCameraTarget = () => {
     if (follow.isInspecting()) {
       follow.stopInspect();
+      focusedVendorId = null;
       if (activeDestination) {
         const p = standFront(activeDestination);
         const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
@@ -258,6 +271,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       const p = standFront(activeDestination);
       const { cx, cz } = worldRect(activeDestination.rect);
       follow.inspectStand(new THREE.Vector3(cx, 1.4, cz), p.cameraYaw, 11);
+      focusedVendorId = activeDestination.id;
       const dist = Math.hypot(p.x - player.position.x, p.z - player.position.z);
       hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: true });
     }
@@ -309,6 +323,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       const wx = toWorldX(mx);
       const wz = toWorldZ(my);
       follow.inspectStand(new THREE.Vector3(wx, 1.4, wz), player.heading, 12);
+      focusedVendorId = null;
       hud.showToast('Đã chuyển góc nhìn tới vị trí được chọn');
     },
     onJoystick: (x, y) => {
@@ -316,6 +331,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       if (x || y) {
         follow.skipIntro();
         if (follow.isInspecting()) follow.stopInspect();
+        focusedVendorId = null;
       }
     },
     onSetLocation: setPlayerLocation,
@@ -368,6 +384,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     } else {
       follow.skipIntro();
       if (follow.isInspecting()) follow.stopInspect();
+      focusedVendorId = null;
       walkingRoute = [];
       player.walkTo(hit.x, hit.z);
     }
@@ -391,11 +408,15 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       entrancePosters.close();
       if (hud.isCardVisible()) hud.hideStand();
       else if (follow.mode === 'overview') toggleOverview();
-      else if (follow.isInspecting()) follow.stopInspect();
+      else if (follow.isInspecting()) {
+        follow.stopInspect();
+        focusedVendorId = null;
+      }
     } else {
       follow.skipIntro();
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'].includes(e.code)) {
         if (follow.isInspecting()) follow.stopInspect();
+        focusedVendorId = null;
       }
     }
   });
@@ -444,11 +465,13 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       walkingRoute = [];
       follow.skipIntro();
       if (follow.isInspecting()) follow.stopInspect();
+      focusedVendorId = null;
     }
     while (walkingRoute.length && Math.hypot(walkingRoute[0].x - player.position.x, walkingRoute[0].z - player.position.z) < 0.35) walkingRoute.shift();
     if (walkingRoute.length) player.walkTo(walkingRoute[0].x, walkingRoute[0].z);
     player.update(dt, follow.forward());
     areas.update(t);
+    vendors.update(t, follow.isInspecting() ? focusedVendorId : null);
     navigation.update(t);
 
     if (t - lastProbe > 0.1) {
