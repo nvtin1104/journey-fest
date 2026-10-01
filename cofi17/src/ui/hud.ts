@@ -390,7 +390,7 @@ export class Hud {
       if (this.expandedMap.height !== this.minimap.height) this.expandedMap.height = this.minimap.height;
       this.mapModal.showModal();
       reset();
-      requestAnimationFrame(() => this.syncExpandedMap(true));
+      requestAnimationFrame(() => this.snapshotExpandedMap());
     });
     window.addEventListener('resize', () => { if (this.mapModal.open) reset(); });
     this.mapModal.addEventListener('close', () => {
@@ -1138,17 +1138,10 @@ export class Hud {
     ctx.stroke();
     ctx.fill();
     ctx.restore();
-    this.syncExpandedMap(false);
   }
 
-  private lastExpandedSync = 0;
-
-  /** Mirrors the minimap into the full-screen map; throttled because the bitmap is several megapixels. */
-  private syncExpandedMap(force: boolean) {
-    if (!this.mapModal.open) return;
-    const now = performance.now();
-    if (!force && now - this.lastExpandedSync < 120) return;
-    this.lastExpandedSync = now;
+  /** The full-screen map is a frozen snapshot taken when it opens, so it stays still while you pan and zoom. */
+  private snapshotExpandedMap() {
     this.expandedMap.getContext('2d')!.drawImage(this.minimap, 0, 0);
   }
 }
