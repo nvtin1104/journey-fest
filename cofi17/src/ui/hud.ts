@@ -2,7 +2,7 @@ import { toMapX, toMapY, type Rect } from '../map/coords';
 
 import type { Gender } from '../player/avatar';
 import { QUALITY, type QualityLevel, type QualityMode } from '../scene/quality';
-import { installer, installHintText } from './pwa';
+import { applyAvailableUpdate, checkForUpdate, installer, installHintText, isStandalone, onUpdateAvailable, prepareOffline } from './pwa';
 import type { ParsedMap, Stand } from '../map/parse';
 import { wallRect } from '../map/walls';
 import { WALL_T } from '../map/parse';
@@ -17,6 +17,7 @@ import {
   Eye,
   User,
   DoorOpen,
+  Download,
   Sparkles,
 
   Settings,
@@ -208,7 +209,26 @@ export class Hud {
     gear.append(makeIcon(Settings, 15));
     gear.title = 'Cài đặt: nhân vật, chất lượng đồ hoạ';
     gear.setAttribute('aria-label', 'Cài đặt');
-    buttons.append(this.overviewBtn, entrance, this.rotateBtn, gear);
+
+    let appDialog: HTMLDialogElement | null = null;
+    let updateAction: HTMLButtonElement | null = null;
+    let updateStatus: HTMLElement | null = null;
+    const offlineAvailable = import.meta.env.PROD && 'serviceWorker' in navigator;
+    const downloadMenuBtn = el('button', 'icon download-menu-btn');
+    const updateDot = el('span', 'update-dot');
+    updateDot.hidden = true;
+    downloadMenuBtn.append(makeIcon(Download, 16), updateDot);
+    downloadMenuBtn.title = 'Tải offline, ghim ứng dụng hoặc cập nhật';
+    downloadMenuBtn.setAttribute('aria-label', downloadMenuBtn.title);
+    downloadMenuBtn.hidden = !offlineAvailable;
+    downloadMenuBtn.addEventListener('click', () => appDialog?.showModal());
+    onUpdateAvailable((available) => {
+      updateDot.hidden = !available;
+      if (updateAction) updateAction.hidden = !available;
+      if (updateStatus) updateStatus.textContent = available ? 'Có bản cập nhật mới.' : 'Chưa có bản cập nhật mới.';
+    });
+
+    buttons.append(this.overviewBtn, entrance, this.rotateBtn, gear, downloadMenuBtn);
 
     // Settings popover: character and graphics quality.
     this.settings = el('div', 'settings');
@@ -237,16 +257,98 @@ export class Hud {
     }
     this.qualityNote = el('div', 'card-sub');
     this.settings.append(this.qualityNote);
-    // Home-screen install: the browser's prompt when it offers one, otherwise manual steps (iPhone).
-    const app = el('div', 'settings-row settings-app');
-    const installBtn = el('button', 'settings-install', 'Cài vào màn hình chính');
-    installBtn.addEventListener('click', () => void installer.prompt());
-    const hintText = installHintText();
-    app.append(el('div', 'card-sub', 'Ứng dụng'), installBtn, el('div', 'card-sub install-note', hintText ?? ''));
-    this.settings.append(app);
+    appDialog = el('dialog', 'offline-guide');
+    const guideTitle = el('h2', undefined, 'Lưu bản đồ');
+    guideTitle.id = 'offline-guide-title';
+    appDialog.setAttribute('aria-labelledby', guideTitle.id);
+    const guideContent = el('div', 'offline-guide-content');
+    const pinHelp = el('p', 'offline-pin-help');
+    const hint = installHintText();
+    if (isStandalone()) {
+      pinHelp.textContent = 'Ứng dụng đã được ghim vào màn hình chính.';
+    } else if (hint === 'in-app') {
+      pinHelp.textContent = 'Để ghim ứng dụng, mở trang này bằng Safari hoặc Chrome. iPhone: Chia sẻ → Thêm vào MH chính. Android: menu ⋮ → Cài đặt ứng dụng.';
+    } else if (hint === 'ios' || /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      pinHelp.textContent = 'Để ghim trên iPhone/iPad: mở bằng Safari → Chia sẻ → Thêm vào MH chính → Thêm.';
+    } else if (/Android/i.test(navigator.userAgent)) {
+      pinHelp.textContent = 'Để ghim trên Android: Chrome → menu ⋮ → Cài đặt ứng dụng (hoặc Thêm vào màn hình chính) → Cài đặt.';
+    } else {
+      pinHelp.textContent = 'Để ghim ứng dụng: mở menu trình duyệt → Cài đặt ứng dụng/Thêm vào màn hình chính. Trên iPhone, dùng Safari → Chia sẻ → Thêm vào MH chính.';
+    }
+    const pinSection = el('section', 'download-option');
+    pinSection.append(el('h3', undefined, 'Ghim vào màn hình chính'), pinHelp);
+    const pinBtn = el('button', 'settings-install offline-pin-btn', installer.available ? 'Cài ứng dụng' : 'Đã hiểu');
+    pinBtn.hidden = isStandalone();
+    pinSection.append(pinBtn);
+
+    const offlineSection = el('section', 'download-option');
+    offlineSection.append(
+      el('h3', undefined, 'Lưu để dùng khi mất mạng'),
+      el('p', undefined, 'Ghim chỉ tạo biểu tượng, không tự lưu dữ liệu. Bạn có thể tải trước hoặc sau khi ghim: khi còn mạng, nhấn nút tải và chờ báo “Đã lưu” trước khi dùng offline. Gói khoảng 8 MB không tự tải nền.'),
+    );
+    const guideActions = el('div', 'offline-guide-actions');
+    const downloadNow = el('button', 'settings-install', 'Tải xuống dùng offline');
+    const downloadStatus = el('p', 'download-status');
+    offlineSection.append(downloadNow, downloadStatus);
+    updateStatus = el('p', 'download-status', 'Chưa kiểm tra bản cập nhật.');
+    const updateSection = el('section', 'download-option');
+    updateSection.append(el('h3', undefined, 'Cập nhật ứng dụng'), updateStatus);
+    const checkUpdate = el('button', 'settings-install', 'Kiểm tra cập nhật');
+    updateAction = el('button', 'settings-install', 'Cập nhật ngay');
+    updateAction.hidden = true;
+    checkUpdate.addEventListener('click', async () => {
+      checkUpdate.disabled = true;
+      checkUpdate.textContent = 'Đang kiểm tra…';
+      try {
+        const available = await checkForUpdate();
+        updateStatus!.textContent = available ? 'Có bản cập nhật mới.' : 'Chưa có bản cập nhật mới.';
+      } finally {
+        checkUpdate.disabled = false;
+        checkUpdate.textContent = 'Kiểm tra lại';
+      }
+    });
+    updateAction.addEventListener('click', () => {
+      appDialog?.close();
+      applyAvailableUpdate();
+    });
+    downloadNow.addEventListener('click', async () => {
+      downloadNow.disabled = true;
+      downloadNow.textContent = 'Đang tải dữ liệu…';
+      downloadStatus.textContent = 'Đang chuẩn bị…';
+      try {
+        const saved = await prepareOffline((fraction) => {
+          const percent = Math.round(fraction * 100);
+          downloadNow.textContent = `Đang tải ${percent}%`;
+          downloadStatus.textContent = `Đã lưu ${percent}% gói offline.`;
+        });
+        downloadStatus.textContent = saved
+          ? 'Đã lưu bản đồ để dùng khi không có mạng.'
+          : 'Tải chưa xong. Kiểm tra kết nối rồi thử lại.';
+      } finally {
+        downloadNow.disabled = false;
+        downloadNow.textContent = 'Tải xuống dùng offline';
+      }
+    });
+    pinBtn.addEventListener('click', async () => {
+      if (installer.available) {
+        appDialog?.close();
+        await installer.prompt();
+      } else {
+        appDialog?.close();
+      }
+    });
+    const closeGuide = el('button', 'offline-guide-close', 'Đóng');
+    closeGuide.addEventListener('click', () => appDialog?.close());
+    guideActions.append(checkUpdate, updateAction, closeGuide);
+    guideContent.append(pinSection, offlineSection, updateSection);
+    appDialog.append(guideTitle, guideContent, guideActions);
+    appDialog.addEventListener('click', (event) => {
+      if (event.target === appDialog) appDialog.close();
+    });
+    document.getElementById('hud')?.append(appDialog);
     installer.onChange(() => {
-      installBtn.hidden = !installer.available;
-      app.hidden = !installer.available && !hintText;
+      pinBtn.textContent = installer.available ? 'Cài ứng dụng' : 'Đã hiểu';
+      pinBtn.hidden = isStandalone();
     });
     gear.addEventListener('click', () => {
       this.settings.hidden = !this.settings.hidden;
@@ -519,7 +621,7 @@ export class Hud {
     this.currentNearbyStand = s;
 
     if (s && !this.isCardVisible() && !this.itemFocused) {
-      this.mobileStandPill.style.display = 'flex';
+      this.mobileStandPill.style.display = '';
       this.mobileStandPill.innerHTML = '';
       const icon = makeIcon(MapPin, 14);
       const label = s.name ? `${s.code ? s.code + ' · ' : ''}${s.name}` : s.code;

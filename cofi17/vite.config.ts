@@ -2,11 +2,10 @@ import { loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 export default defineConfig(({ mode }) => {
-  const mapUrl = loadEnv(mode, '.', 'VITE_').VITE_MAP_URL;
+  const mapUrl = loadEnv(mode, '.', 'VITE_').VITE_MAP_URL ?? '';
   return {
+    define: { __LIVE_MAP_URL__: JSON.stringify(mapUrl) },
     server: {
       port: 4317,
       strictPort: true,
@@ -25,12 +24,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
-      // Offline + "Add to Home Screen". The service worker precaches the whole app (code, font,
-      // posters, map scans) on the first visit; registration and the update prompt live in src/ui/pwa.ts.
+      // Offline + "Add to Home Screen". Registration and full asset caching are user initiated.
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.js',
         registerType: 'prompt',
         injectRegister: false,
-        // Icons are already matched by globPatterns below; the plugin adds the manifest itself.
         includeManifestIcons: false,
         manifest: {
           name: 'Color Fiesta · Bản đồ 3D',
@@ -49,20 +49,9 @@ export default defineConfig(({ mode }) => {
             { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           ],
         },
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,jpg}'],
-          // Anything bigger is skipped with a build warning: run it through `pnpm image` first.
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-          navigateFallback: 'index.html',
-          cleanupOutdatedCaches: true,
-          // Live map data (optional): use the network, fall back to the last copy when offline.
-          runtimeCaching: mapUrl
-            ? [{
-                urlPattern: new RegExp(`^${escapeRegExp(mapUrl)}`),
-                handler: 'NetworkFirst',
-                options: { cacheName: 'map-data', networkTimeoutSeconds: 5 },
-              }]
-            : [],
         },
       }),
     ],

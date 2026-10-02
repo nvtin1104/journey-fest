@@ -1,6 +1,7 @@
 import {
   createElement,
   Search,
+  Download,
   Compass,
   Navigation,
   MapPin,
@@ -32,6 +33,7 @@ export {
   ZoomOut,
   Maximize,
   Search,
+  Download,
   Compass,
   Navigation,
   MapPin,

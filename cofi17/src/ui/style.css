@@ -131,6 +131,9 @@ html, body {
 }
 .buttons button:hover { background: #fff; }
 .buttons button.icon { padding: 8px 11px; font-size: 15px; line-height: 1; }
+.download-menu-btn { position:relative; }
+.download-menu-btn .update-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border:2px solid #fff; border-radius:50%; background:#ec4f77; }
+.download-menu-btn .update-dot[hidden] { display:none; }
 .settings {
   width: 250px;
   padding: 12px;
@@ -887,6 +890,37 @@ button { touch-action: manipulation; }
 .card, .nav-bottom-panel { bottom:132px; max-height:calc(100dvh - 260px); overflow-y:auto; }
 .mobile-stand-pill { bottom:132px; max-width:calc(100vw - 24px); white-space:normal; animation:none; }
 }
+@media (orientation:portrait) and (max-width:768px) {
+  .mobile-stand-pill:not(.poster-nearby) {
+    display:grid;
+    grid-template-columns:16px minmax(0,1fr);
+    grid-template-rows:auto auto;
+    align-items:center;
+    gap:2px 8px;
+    width:min(340px,calc(100vw - 32px));
+    padding:9px 13px;
+    border-radius:18px;
+    font-size:13px;
+    line-height:1.25;
+    text-align:left;
+  }
+  .mobile-stand-pill:not(.poster-nearby) > svg { grid-column:1; grid-row:1 / span 2; }
+  .mobile-stand-pill:not(.poster-nearby) > span:first-of-type {
+    grid-column:2;
+    min-width:0;
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+    overflow:hidden;
+  }
+  .mobile-stand-pill:not(.poster-nearby) .pill-hint {
+    grid-column:2;
+    justify-self:start;
+    padding:0;
+    background:transparent;
+    font-size:10px;
+  }
+}
 @media (orientation:landscape) and (max-height:520px) {
 .hud-top { width:min(300px,calc(100vw - 300px)); }
 .hud-side { flex-direction:row; align-items:flex-start; }
@@ -1158,6 +1192,18 @@ button { touch-action: manipulation; }
   color: #fff;
   cursor: pointer;
 }
+.settings-install:disabled { opacity:.65; cursor:wait; }
 .settings-install[hidden], .settings-row[hidden], .install-note:empty { display: none; }
 .settings-app { margin: 10px 0 0; }
 .install-note { margin-top: 4px; line-height: 1.45; }
+.offline-guide { width:min(440px,calc(100vw - 28px)); max-height:calc(100dvh - 32px); margin:auto; padding:20px; border:0; border-radius:20px; color:var(--ink); box-shadow:0 18px 60px #211b3c55; }
+.offline-guide::backdrop { background:#211b3c99; backdrop-filter:blur(3px); }
+.offline-guide h2 { margin:0 0 12px; font-size:18px; }
+.offline-guide-content p { margin:0 0 10px; font-size:13px; line-height:1.55; }
+.download-option { padding:10px 0; border-top:1px solid #e6e1f2; }
+.download-option h3 { margin:0 0 6px; font-size:14px; }
+.download-option .settings-install { margin-top:4px; }
+.download-status { min-height:18px; margin:6px 0 0 !important; color:var(--muted); font-size:11px !important; }
+.offline-pin-help { padding:10px 12px; border-radius:12px; background:#f1edff; }
+.offline-guide-actions { display:grid; gap:8px; margin-top:6px; }
+.offline-guide-close { width:100%; padding:8px 10px; border:1px solid #ded9ef; border-radius:10px; background:#fff; font:inherit; font-size:12px; font-weight:700; color:var(--ink); cursor:pointer; }

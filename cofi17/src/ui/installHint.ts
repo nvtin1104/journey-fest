@@ -22,6 +22,6 @@ export function installHint(p: InstallPlatform): 'ios' | 'in-app' | null {
 }
 
 export const INSTALL_HINT_TEXT = {
-  ios: 'Dùng như ứng dụng, cả khi mất mạng: bấm Chia sẻ rồi chọn "Thêm vào MH chính".',
+  ios: 'Bước này chỉ ghim biểu tượng. Để mở khi mất mạng, hãy mở trang lúc đang có mạng, nhấn biểu tượng tải và chọn “Tải xuống dùng offline”, rồi chờ báo đã lưu.',
   'in-app': 'Đang mở trong ứng dụng khác. Mở trang bằng Safari hoặc Chrome để cài bản đồ vào màn hình chính.',
 } as const;

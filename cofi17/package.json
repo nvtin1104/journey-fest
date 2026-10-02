@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
-    "deploy:cf": "pnpm build && npx --yes wrangler pages deploy dist",
+    "deploy:cf": "pnpm build && npx --yes wrangler pages deploy dist --project-name journey-fest --branch main",
     "image": "node scripts/optimize-image.mjs"
   },
   "dependencies": {

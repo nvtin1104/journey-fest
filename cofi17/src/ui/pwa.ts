@@ -73,6 +73,101 @@ class Installer {
 
 export const installer = new Installer();
 
+let offlineWorkerPromise: Promise<ServiceWorkerRegistration> | null = null;
+let updateOfflineWorker: ((reloadPage?: boolean) => Promise<void>) | null = null;
+let hasUpdate = false;
+const updateListeners = new Set<(available: boolean) => void>();
+
+export function onUpdateAvailable(listener: (available: boolean) => void) {
+  updateListeners.add(listener);
+  listener(hasUpdate);
+  return () => updateListeners.delete(listener);
+}
+
+function setUpdateAvailable(available: boolean) {
+  hasUpdate = available;
+  for (const listener of updateListeners) listener(available);
+}
+
+export function applyAvailableUpdate() {
+  if (!hasUpdate || !updateOfflineWorker) return;
+  setUpdateAvailable(false);
+  void updateOfflineWorker(true);
+}
+
+export async function checkForUpdate(): Promise<boolean> {
+  if (!navigator.onLine) {
+    toast('Kết nối mạng để kiểm tra bản cập nhật.');
+    return false;
+  }
+  try {
+    const registration = await registerOfflineWorker();
+    await registration.update();
+    const installing = registration.installing;
+    if (installing && installing.state !== 'installed' && installing.state !== 'activated') {
+      await new Promise<void>((resolve) => {
+        const onStateChange = () => {
+          if (installing.state === 'installed' || installing.state === 'activated' || installing.state === 'redundant') {
+            installing.removeEventListener('statechange', onStateChange);
+            resolve();
+          }
+        };
+        installing.addEventListener('statechange', onStateChange);
+        onStateChange();
+      });
+    }
+    const available = !!registration.waiting;
+    setUpdateAvailable(available);
+    return available;
+  } catch {
+    toast('Chưa kiểm tra được cập nhật. Hãy thử lại khi có mạng.');
+    return false;
+  }
+}
+
+/** Register the caching service worker only after the visitor asks to save offline. */
+function registerOfflineWorker(): Promise<ServiceWorkerRegistration> {
+  if (offlineWorkerPromise) return offlineWorkerPromise;
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) {
+    return Promise.reject(new Error('offline service worker is unavailable'));
+  }
+
+  const attempt = new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+    let settled = false;
+    let timeout = 0;
+    const finish = (error?: unknown, registration?: ServiceWorkerRegistration) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      if (error) reject(error);
+      else if (registration) resolve(registration);
+      else reject(new Error('service worker is not active'));
+    };
+    timeout = window.setTimeout(() => finish(new Error('service worker timeout')), 45000);
+
+    try {
+      updateOfflineWorker = registerSW({
+        onNeedRefresh: () => setUpdateAvailable(true),
+        onRegisterError: (err) => {
+          console.warn('Offline mode is unavailable.', err);
+          finish(err);
+        },
+      });
+      void navigator.serviceWorker.ready.then(
+        (registration) => finish(undefined, registration),
+        (error) => finish(error),
+      );
+    } catch (error) {
+      finish(error);
+    }
+  });
+  offlineWorkerPromise = attempt.catch((error) => {
+    offlineWorkerPromise = null;
+    throw error;
+  });
+  return offlineWorkerPromise;
+}
+
 let toastTimer = 0;
 /** Small status message at the bottom of the screen, optionally with one action button. */
 export function toast(message: string, action?: { label: string; run: () => void }, seconds = 6) {
@@ -96,13 +191,105 @@ export function toast(message: string, action?: { label: string; run: () => void
   if (!action) toastTimer = window.setTimeout(() => (box.hidden = true), seconds * 1000);
 }
 
+/** Register the service worker on demand, cache the app, and ask the browser to retain it. */
+export async function prepareOffline(onProgress?: (fraction: number) => void): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) {
+    toast('Tải offline cần mở trang bằng HTTPS trên trình duyệt chính.');
+    return false;
+  }
+  if (!navigator.onLine && !navigator.serviceWorker.controller) {
+    toast('Cần có mạng lần đầu để tải dữ liệu dùng offline.');
+    return false;
+  }
+
+  try {
+    const registration = await registerOfflineWorker();
+    await navigator.serviceWorker.ready;
+    if (!registration.active) throw new Error('service worker is not active');
+    const worker = registration.waiting ?? registration.active;
+    if (!worker) throw new Error('service worker is not active');
+    await new Promise<void>((resolve, reject) => {
+      const channel = new MessageChannel();
+      const timeout = window.setTimeout(() => {
+        channel.port1.close();
+        reject(new Error('offline download timeout'));
+      }, 120000);
+      channel.port1.onmessage = ({ data }: MessageEvent<{ type: string; completed?: number; total?: number; message?: string }>) => {
+        if (data.type === 'OFFLINE_PROGRESS' && data.total) {
+          onProgress?.(data.completed! / data.total);
+        } else if (data.type === 'OFFLINE_READY') {
+          window.clearTimeout(timeout);
+          channel.port1.close();
+          resolve();
+        } else if (data.type === 'OFFLINE_ERROR') {
+          window.clearTimeout(timeout);
+          channel.port1.close();
+          reject(new Error(data.message ?? 'offline download failed'));
+        }
+      };
+      try {
+        worker.postMessage({ type: 'CACHE_OFFLINE' }, [channel.port2]);
+      } catch (error) {
+        window.clearTimeout(timeout);
+        channel.port1.close();
+        reject(error);
+      }
+    });
+    // A cache can be filled before the first install is controlling this page. Don't claim
+    // reload-safe offline support until the browser confirms that the worker owns this client.
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          reject(new Error('service worker did not take control'));
+        }, 15000);
+        const onControllerChange = () => {
+          if (!navigator.serviceWorker.controller) return;
+          window.clearTimeout(timeout);
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          resolve();
+        };
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+        onControllerChange();
+      });
+    }
+    // Verify the saved shell by URL and ensure this page is controlled before reporting success.
+    const savedShell = await caches.match(new URL('/', location.origin).href);
+    if (!savedShell) throw new Error('offline app shell is missing');
+    await navigator.storage?.persist?.();
+    toast('Đã lưu bản đồ để lần sau mở được khi không có mạng.');
+    return true;
+  } catch {
+    toast('Chưa tải xong dữ liệu offline. Hãy kết nối mạng rồi thử lại.');
+    return false;
+  }
+}
+
 /** Install button and instructions on the start card. */
 function bindStartCard() {
   const button = document.getElementById('install-btn');
   const hint = document.getElementById('install-hint');
   if (button) {
-    button.addEventListener('click', () => void installer.prompt());
-    installer.onChange(() => (button.hidden = !installer.available));
+    button.addEventListener('click', () => {
+      if (installer.available) {
+        if (hint) {
+          hint.textContent = 'Sau khi cài, để mở khi mất mạng hãy quay lại trang khi đang có mạng, nhấn biểu tượng tải → “Tải xuống dùng offline” và chờ báo đã lưu.';
+          hint.hidden = false;
+        }
+        void installer.prompt();
+        return;
+      }
+      if (hint) {
+        hint.textContent = installHintText() ?? (/Android/i.test(navigator.userAgent)
+          ? 'Android: Chrome → menu ⋮ → Cài đặt ứng dụng/Thêm vào màn hình chính. iPhone: Safari → Chia sẻ → Thêm vào MH chính. Ghim chỉ tạo biểu tượng; muốn dùng khi mất mạng, hãy tải offline khi đang có mạng.'
+          : 'Mở menu trình duyệt → Cài đặt ứng dụng/Thêm vào màn hình chính. Ghim chỉ tạo biểu tượng; muốn dùng khi mất mạng, hãy tải offline khi đang có mạng.');
+        hint.hidden = false;
+      }
+    });
+    installer.onChange(() => {
+      button.hidden = !import.meta.env.PROD || isStandalone();
+      button.textContent = installer.available ? 'Cài vào màn hình chính' : 'Cách ghim ứng dụng';
+    });
   }
   const text = installHintText();
   if (hint && text) {
@@ -114,20 +301,17 @@ function bindStartCard() {
 export function setupPwa() {
   installer.listen();
   bindStartCard();
-  // Only production builds have a service worker; `pnpm dev` always serves fresh files.
-  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
-  const updateSW = registerSW({
-    onOfflineReady: () => toast('Đã lưu bản đồ: lần sau mở được cả khi không có mạng.'),
-    // Waits for the visitor instead of swapping files under a running tour.
-    onNeedRefresh: () => toast('Đã có bản cập nhật của bản đồ.', { label: 'Cập nhật', run: () => void updateSW(true) }),
-    onRegisteredSW: (_url, registration) => {
-      // On event day the app may stay open for hours: look for a new version every hour.
-      if (registration) {
-        window.setInterval(() => {
-          if (navigator.onLine) registration.update().catch(() => {});
-        }, 60 * 60 * 1000);
-      }
-    },
-    onRegisterError: (err) => console.warn('Offline mode is unavailable.', err),
-  });
+  // Register/check the worker when the app is opened so already-installed apps can
+  // discover fixes. Registration downloads only the small worker; offline assets remain opt-in.
+  if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+    const checkWorker = () => {
+      if (!navigator.onLine) return;
+      void registerOfflineWorker()
+        .then((registration) => registration.update())
+        .catch(() => {});
+    };
+    checkWorker();
+    window.addEventListener('online', checkWorker);
+    window.setInterval(checkWorker, 60 * 60 * 1000);
+  }
 }
