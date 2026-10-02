@@ -1,5 +1,5 @@
 {
-"meta": {"eventId": "bc616b65-3993-4aff-90a2-ed484c1b1da0", "gridSize": 10, "version": 1790585788, "updatedAt": "2026-09-28T08:56:28.794543Z", "isPublished": true, "referenceImages": ["public/map/map sns 1.jpg", "public/map/map sns 2.jpg", "public/map/map sns 3.jpg", "public/map/map sns 4.jpg", "public/map/map sns 5.jpg", "public/map/map sns 6.jpg", "public/map/map sns 7.jpg"]},
+"meta": {"eventId": "bc616b65-3993-4aff-90a2-ed484c1b1da0", "gridSize": 10, "version": 1790585788, "updatedAt": "2026-09-28T08:56:28.794543Z", "isPublished": true, "referenceImages": ["public/map/map-sns-1.webp", "public/map/map-sns-2.webp", "public/map/map-sns-3.webp", "public/map/map-sns-4.webp", "public/map/map-sns-5.webp", "public/map/map-sns-6.webp", "public/map/map-sns-7.webp"]},
 "nodes": [
 {"id":"e62c1a83-0bff-4948-ab9b-c102161edea2","type":"AREA","areaTypeId":2,"label":"Hall A1 · Artist Alley","x":220,"y":-410,"width":3360,"height":960,"color":"#f7f1fe","hideLabel":false},
 {"id":"498b6911-4c87-4ce1-a22d-f51d66f43c25","type":"AREA","areaTypeId":3,"label":"WC","x":220,"y":-410,"width":240,"height":200,"color":"#f5f5f5"},

@@ -14,11 +14,11 @@ function iconButton(icon: Parameters<typeof makeIcon>[0], label: string) {
 }
 
 const guidePages = [
-  { url: '/posters/cofi-timeline.png', title: 'Cẩm nang đi COFI · Timeline và lưu ý', tab: 'Timeline & lưu ý' },
-  { url: '/posters/cofi-packing.png', title: 'Cẩm nang đi COFI · Vật dụng nên mang theo', tab: 'Vật dụng mang theo' },
-  { url: '/posters/cofi-stage-saturday.png', title: 'Lịch trình sân khấu · Thứ Bảy', tab: 'Thứ Bảy' },
-  { url: '/posters/cofi-stage-sunday.png', title: 'Lịch trình sân khấu · Chủ Nhật', tab: 'Chủ Nhật' },
-  { url: '/posters/cofi-activities.png', title: 'Lịch trình hoạt động · Cả hai ngày', tab: 'Hoạt động' },
+  { url: '/posters/cofi-timeline.webp', title: 'Cẩm nang đi COFI · Timeline và lưu ý', tab: 'Timeline & lưu ý' },
+  { url: '/posters/cofi-packing.webp', title: 'Cẩm nang đi COFI · Vật dụng nên mang theo', tab: 'Vật dụng mang theo' },
+  { url: '/posters/cofi-stage-saturday.webp', title: 'Lịch trình sân khấu · Thứ Bảy', tab: 'Thứ Bảy' },
+  { url: '/posters/cofi-stage-sunday.webp', title: 'Lịch trình sân khấu · Chủ Nhật', tab: 'Chủ Nhật' },
+  { url: '/posters/cofi-activities.webp', title: 'Lịch trình hoạt động · Cả hai ngày', tab: 'Hoạt động' },
 ];
 
 /** Entrance guides plus floor-map printouts and an enlarged viewer at the check-in desks. */

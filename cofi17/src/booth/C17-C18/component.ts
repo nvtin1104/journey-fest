@@ -4,7 +4,7 @@ import type { Stand } from '../../map/parse';
 import { standMatrix, standSize } from '../../scene/booths';
 import { createCat, type CatAction } from './cat';
 import { boothConfig } from './config';
-const { banner: bannerUrl, sample: sampleUrl } = boothConfig.assets;
+const { banner: bannerUrl, sample: sampleUrl, sampleTexture: sampleTextureUrl } = boothConfig.assets;
 
 export const FEATURED_STAND_ID = boothConfig.id;
 export function buildBoothSample(stand: Stand) {
@@ -37,13 +37,13 @@ export function buildBoothSample(stand: Stand) {
   board.name = 'c17-c18-backdrop';
   group.add(board);
   const sampleSize = Math.min(1.35, boardHeight - 0.22, W - 0.35);
-  const sample = picture(sampleUrl, sampleSize, sampleSize);
+  const sample = picture(sampleTextureUrl, sampleSize, sampleSize);
   sample.name = 'c17-c18-sample';
   sample.userData.sampleUrl = sampleUrl;
   sample.position.set(W / 2 - sampleSize / 2 - 0.18, boardHeight / 2, boardZ + 0.035);
   group.add(sample);
   const tabletopSize = Math.min(0.42, depth - 0.28);
-  const tabletopSample = picture(sampleUrl, tabletopSize, tabletopSize);
+  const tabletopSample = picture(sampleTextureUrl, tabletopSize, tabletopSize);
   tabletopSample.name = 'c17-c18-tabletop-sample';
   tabletopSample.userData.sampleUrl = sampleUrl;
   tabletopSample.rotation.x = -Math.PI / 2;

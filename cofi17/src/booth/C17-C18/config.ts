@@ -1,5 +1,7 @@
 import bannerUrl from './assets/banner.jpg';
-import sampleUrl from './assets/sample.png';
+import sampleUrl from './assets/sample.webp';
+// 1024 px copy for the two boards in the 3D scene; the full image is only decoded in the viewer.
+import sampleTextureUrl from './assets/sample-texture.webp';
 
 /** Editable booth information and assets shared by the scene and detail card. */
 export const boothConfig = {
@@ -10,5 +12,5 @@ export const boothConfig = {
     label: 'Xem bài giới thiệu trên Facebook',
     url: 'https://www.facebook.com/groups/colorfiestacommunity/permalink/1395325889463952/?rdid=9xr8ANfMM91594vx#',
   }],
-  assets: { banner: bannerUrl, sample: sampleUrl },
+  assets: { banner: bannerUrl, sample: sampleUrl, sampleTexture: sampleTextureUrl },
 };
