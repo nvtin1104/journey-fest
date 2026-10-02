@@ -1,7 +1,8 @@
 import { SCALE } from '../config';
 import { toWorldX, toWorldZ, type Rect } from './coords';
-import { WALL_T, type ParsedMap } from './parse';
+import { WALL_T, type ParsedMap, type Stand } from './parse';
 import { wallRect } from './walls';
+import { boothConfig as n22BoothConfig } from '../booth/N22/config';
 
 /** Axis-aligned box on the ground plane, in world metres. */
 export interface AABB {
@@ -107,13 +108,29 @@ export class CollisionWorld {
   }
 }
 
+/** Thin strip along a stand's back edge: open booths keep only their display wall solid. */
+function backStrip(s: Stand): Rect {
+  const t = 10;
+  const r = s.rect;
+  switch (s.facing) {
+    case 'N': return { x: r.x, y: r.y + r.h - t, w: r.w, h: t };
+    case 'S': return { x: r.x, y: r.y, w: r.w, h: t };
+    case 'E': return { x: r.x, y: r.y, w: t, h: r.h };
+    case 'W': return { x: r.x + r.w - t, y: r.y, w: t, h: r.h };
+  }
+}
+
 /** Everything the visitor can't walk through, in world space. */
 export function buildColliders(map: ParsedMap): CollisionWorld {
   const boxes: AABB[] = [];
   const push = (r: Rect, pad = 0) => boxes.push(aabbFromRect(r, pad));
 
   for (const w of map.walls) push(wallRect(w, WALL_T));
-  for (const s of map.stands) if (s.kind !== 'foodcourt') push(s.rect);
+  for (const s of map.stands) {
+    if (s.kind === 'foodcourt') continue;
+    if (s.id === n22BoothConfig.id) push(backStrip(s));
+    else push(s.rect);
+  }
   for (const r of map.rooms) push(r.rect);
   for (const b of map.billboards) push(b.rect);
   for (const c of map.columns) if (!c.decor) push(c.rect, 0.1);

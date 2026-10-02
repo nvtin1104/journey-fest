@@ -1,6 +1,6 @@
 import { openSampleViewer } from './booth/C17-C18/viewer';
 import { buildA9Booth, A9_STAND_ID } from './booth/A9/component';
-import { boothConfig as boothConfigA9 } from './booth/A9/config';
+import { buildN22Booth, N22_STAND_ID } from './booth/N22/component';
 /**
  * Everything that only matters once the visitor presses "Start": detailed stands and signs,
  * the character, controls and the HUD. Loaded as a separate chunk so the start screen appears fast.
@@ -80,6 +80,9 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const a9Stand = map.stands.find((stand) => stand.id === A9_STAND_ID);
   const a9Booth = a9Stand ? buildA9Booth(a9Stand) : null;
   if (a9Booth) detail.add(a9Booth.group);
+  const n22Stand = map.stands.find((stand) => stand.id === N22_STAND_ID);
+  const n22Booth = n22Stand ? buildN22Booth(n22Stand) : null;
+  if (n22Booth) detail.add(n22Booth.group);
   let focusedVendorId: string | null = null;
 
   o.onProgress(0.5, 'Đang dựng khu vực…');
@@ -369,25 +372,18 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     raycaster.setFromCamera(ndc, camera);
     // Pick the nearest rendered surface, rather than projecting through the booth onto the floor.
     const surfaceHit = raycaster.intersectObject(detail, true).find(hit => hit.object instanceof THREE.Mesh);
-    const sampleTargets = [...(boothSample?.targets ?? []), ...(a9Booth?.targets ?? [])];
+    const sampleTargets = [...(boothSample?.targets ?? []), ...(a9Booth?.targets ?? []), ...(n22Booth?.targets ?? [])];
     if (sampleTargets.length) {
       const sampleHit = raycaster.intersectObjects(sampleTargets, false)[0];
       if (sampleHit && (!surfaceHit || sampleHit.distance <= surfaceHit.distance + 0.02)) {
+        const data = sampleHit.object.userData;
         openSampleViewer({
-          url: String(sampleHit.object.userData.sampleUrl),
-          boothLabel: sampleHit.object.userData.sampleIndex !== undefined
-            ? boothConfigA9.code
-            : String(sampleHit.object.userData.sampleLabel ?? 'C17–C18'),
-          boothName: String(sampleHit.object.userData.sampleBoothName ?? 'Bốt Củ Chuối Xả kho đi Úc'),
-          fileName: String(sampleHit.object.userData.sampleFileName ?? 'C17-C18-sample.webp'),
-          samples: sampleHit.object.userData.sampleIndex !== undefined
-            ? boothConfigA9.samples.map((sample, index) => ({
-                url: sample.full,
-                title: sample.title,
-                fileName: `A9-${index + 1}.webp`,
-              }))
-            : undefined,
-          initialIndex: Number(sampleHit.object.userData.sampleIndex ?? 0),
+          url: String(data.sampleUrl),
+          boothLabel: String(data.sampleLabel ?? 'C17–C18'),
+          boothName: String(data.sampleBoothName ?? 'Bốt Củ Chuối Xả kho đi Úc'),
+          fileName: String(data.sampleFileName ?? 'C17-C18-sample.webp'),
+          samples: data.sampleList as { url: string; title?: string; fileName?: string }[] | undefined,
+          initialIndex: Number(data.sampleIndex ?? 0),
         });
         return;
       }
@@ -521,6 +517,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     areas.update(t);
     vendors.update(t, follow.isInspecting() ? focusedVendorId : null);
     boothSample?.update(t);
+    n22Booth?.update(t);
     navigation.update(t);
 
     if (t - lastProbe > 0.1) {

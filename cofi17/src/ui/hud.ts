@@ -12,6 +12,8 @@ import { createBoothDetails } from '../booth/C17-C18/details';
 import { boothConfig } from '../booth/C17-C18/config';
 import { createBoothDetails as createA9BoothDetails } from '../booth/A9/details';
 import { boothConfig as a9BoothConfig } from '../booth/A9/config';
+import { createBoothDetails as createN22BoothDetails } from '../booth/N22/details';
+import { boothConfig as n22BoothConfig } from '../booth/N22/config';
 import {
   makeIcon,
   Compass,
@@ -750,6 +752,9 @@ export class Hud {
     }
     if (s.id === a9BoothConfig.id) {
       this.card.append(createA9BoothDetails(s));
+    }
+    if (s.id === n22BoothConfig.id) {
+      this.card.append(createN22BoothDetails(s));
     }
 
     // Groups

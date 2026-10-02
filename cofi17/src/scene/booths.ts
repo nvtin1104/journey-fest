@@ -7,6 +7,7 @@ import { Instancer } from './instancer';
 import { SIGN_GAP, type SignAtlas } from './signAtlas';
 import { boothConfig } from '../booth/C17-C18/config';
 import { boothConfig as a9BoothConfig } from '../booth/A9/config';
+import { boothConfig as n22BoothConfig } from '../booth/N22/config';
 
 const FRAME_COLOR = '#b8b2d6';
 const MERCH_COLORS = ['#ffb3c7', '#ffd88a', '#a8e6cf', '#9ed7ff', '#d3b5ff', '#ffc3a0', '#fff1a8', '#b5f0ff'];
@@ -90,13 +91,20 @@ function buildBooth(parts: Parts, atlas: SignAtlas, s: Stand) {
   const counterDepth = THREE.MathUtils.clamp(D * BOOTH.counterDepthRatio, 0.5, 1.2);
   const counterZ = D / 2 - counterDepth / 2 - 0.03;
   const h = BOOTH.counterHeight;
-  const featured = s.id === boothConfig.id || s.id === a9BoothConfig.id;
+  const featured = s.id === boothConfig.id || s.id === a9BoothConfig.id || s.id === n22BoothConfig.id;
+  const isN22 = s.id === n22BoothConfig.id;
+  const wallH = BOOTH.postHeight - 0.1;
 
-  parts.body.push(partMatrix(base, W - 0.12, h - 0.04, counterDepth, 0, (h - 0.04) / 2, counterZ), s.color);
-  parts.body.push(partMatrix(base, W - 0.1, 0.1, 0.02, 0, h * 0.72, counterZ + counterDepth / 2 + 0.005), tint(s.color, 0.65));
-  parts.top.push(partMatrix(base, W - 0.06, 0.05, counterDepth + 0.06, 0, h - 0.015, counterZ));
-  if (s.id !== boothConfig.id) {
-    parts.body.push(partMatrix(base, W - 0.1, BOOTH.backPanelHeight, 0.05, 0, BOOTH.backPanelHeight / 2, -D / 2 + 0.06), tint(s.color, 0.55));
+  if (isN22) {
+    // Open photo booth: one tall display wall at the back carries the name, banner and samples.
+    parts.body.push(partMatrix(base, W - 0.12, wallH, 0.08, 0, wallH / 2, -D / 2 + 0.06), tint(s.color, 0.55));
+  } else {
+    parts.body.push(partMatrix(base, W - 0.12, h - 0.04, counterDepth, 0, (h - 0.04) / 2, counterZ), s.color);
+    parts.body.push(partMatrix(base, W - 0.1, 0.1, 0.02, 0, h * 0.72, counterZ + counterDepth / 2 + 0.005), tint(s.color, 0.65));
+    parts.top.push(partMatrix(base, W - 0.06, 0.05, counterDepth + 0.06, 0, h - 0.015, counterZ));
+    if (s.id !== boothConfig.id) {
+      parts.body.push(partMatrix(base, W - 0.1, BOOTH.backPanelHeight, 0.05, 0, BOOTH.backPanelHeight / 2, -D / 2 + 0.06), tint(s.color, 0.55));
+    }
   }
 
   const p = BOOTH.postSize;
@@ -108,13 +116,18 @@ function buildBooth(parts: Parts, atlas: SignAtlas, s: Stand) {
   parts.frame.push(partMatrix(base, W, p, p, 0, ph - p / 2, -D / 2 + p));
 
   const fh = BOOTH.fasciaHeight;
-  const fy = ph - fh / 2 + 0.02;
-  // The board sits just in front of the posts so no faces are shared (shared faces flicker).
-  const fz = D / 2 + 0.005;
-  parts.body.push(partMatrix(base, W + 0.04, fh + 0.04, 0.06, 0, fy, fz), s.color);
-  const bannerWidth = s.id === boothConfig.id ? (fh - 0.04) * (3543 / 1063) : 0;
-  const titleWidth = W - 0.04 - bannerWidth;
-  atlas.add({ code: s.code, name: s.name, color: s.color }, titleWidth, fh - 0.04, signMatrix(base, -bannerWidth / 2, fy, fz + 0.03 + SIGN_GAP));
+  if (isN22) {
+    // The name board lives on the display wall instead of a front fascia.
+    atlas.add({ code: s.code, name: s.name, color: s.color }, W - 0.24, fh - 0.04, signMatrix(base, 0, wallH - fh / 2 - 0.06, -D / 2 + 0.13 + SIGN_GAP));
+  } else {
+    const fy = ph - fh / 2 + 0.02;
+    // The board sits just in front of the posts so no faces are shared (shared faces flicker).
+    const fz = D / 2 + 0.005;
+    parts.body.push(partMatrix(base, W + 0.04, fh + 0.04, 0.06, 0, fy, fz), s.color);
+    const bannerWidth = s.id === boothConfig.id ? (fh - 0.04) * (3543 / 1063) : 0;
+    const titleWidth = W - 0.04 - bannerWidth;
+    atlas.add({ code: s.code, name: s.name, color: s.color }, titleWidth, fh - 0.04, signMatrix(base, -bannerWidth / 2, fy, fz + 0.03 + SIGN_GAP));
+  }
   if (!featured) merchOnCounter(parts, base, s, W, counterZ, counterDepth, h + 0.01);
 }
 

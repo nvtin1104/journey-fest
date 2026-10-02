@@ -61,6 +61,11 @@ export function buildA9Booth(stand: Stand) {
     print.userData.sampleBoothName = boothConfig.name;
     print.userData.sampleFileName = `A9-${index + 1}.webp`;
     print.userData.sampleIndex = index;
+    print.userData.sampleList = boothConfig.samples.map((entry, i) => ({
+      url: entry.full,
+      title: entry.title,
+      fileName: `A9-${i + 1}.webp`,
+    }));
     group.add(print);
     targets.push(print);
   });
