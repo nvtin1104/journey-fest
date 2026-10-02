@@ -76,7 +76,22 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const vendors = buildVendors(map.stands, map, pathfinder, world);
   detail.add(vendors.group);
   // Cosplayer NPC strolling in front of the main stage.
-  const hsin = buildHsin(pathfinder, world);
+  const hsin = buildHsin({
+    pathfinder,
+    world,
+    renderer,
+    hudRoot: o.hudRoot,
+    detail: o.quality.level === 'low' ? 0.55 : o.quality.level === 'medium' ? 0.8 : 1,
+    onPhoto: () => {
+      // Render this exact frame and save it before the drawing buffer is cleared.
+      renderer.render(scene, camera);
+      const link = document.createElement('a');
+      link.href = renderer.domElement.toDataURL('image/jpeg', 0.92);
+      link.download = `color-fiesta-hsin-${Date.now()}.jpg`;
+      link.click();
+      hud.showToast('Đã lưu ảnh chụp cùng Hsin!');
+    },
+  });
   detail.add(hsin.root);
   const featuredStand = map.stands.find((stand) => stand.id === FEATURED_STAND_ID);
   const boothSample = featuredStand ? buildBoothSample(featuredStand) : null;
@@ -377,7 +392,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     if (hsinHit && (!surfaceHit || hsinHit.distance <= surfaceHit.distance + 0.02)) {
       walkingRoute = [];
       player.stopWalking();
-      hud.showToast(`Hsin · Phương Anh: “${hsin.talk(clock)}”`);
+      hsin.talk(clock);
       return;
     }
     const sampleTargets = [...(boothSample?.targets ?? []), ...(a9Booth?.targets ?? [])];

@@ -38,7 +38,7 @@ Khi mở trang, app chỉ tải phần toàn cảnh. Chọn **Nam / Nữ** rồi
 
 - Tìm gian hàng theo mã hoặc tên ở ô tìm kiếm.
 - Link `/#A15` mở thẳng tới trước quầy A15 (sau khi bấm Bắt đầu).
-- NPC cosplay **Hsin · Phương Anh** (hồ ly tóc trắng, váy đỏ – đen, đuôi cáo) đi dạo trước sân khấu chính ở Hall A3. Lại gần hoặc chạm vào bạn ấy để nghe thoại (`src/npc/hsin.ts`).
+- NPC cosplay **Hsin · Phương Anh** đi dạo trước sân khấu chính ở Hall A3, với model và style riêng: tỉ lệ người thật, chất liệu PBR (lụa, satin, voan, lông, vàng), tóc và đuôi cáo dựng từ hàng trăm sợi, bảng tên và hộp thoại riêng. Lại gần hoặc chạm vào bạn ấy để nghe thoại, bấm **Chụp hình cùng Hsin** để đếm ngược và lưu ảnh (`src/npc/hsin/`).
 
 ## Thiết bị hỗ trợ
 

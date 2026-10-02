@@ -1,0 +1,179 @@
+/* Hsin's own UI: dark crimson glass with gold trim, apart from the venue's light pastel panels. */
+.hsin-dialog {
+  --hsin-gold: #e8c06a;
+  --hsin-gold-soft: rgba(232, 192, 106, 0.45);
+  --hsin-crimson: #8c0f1f;
+  position: absolute;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: min(560px, calc(100vw - 32px));
+  transform: translate(-50%, 24px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.36s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  z-index: 20;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+}
+.hsin-dialog.is-open {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.hsin-dialog__frame {
+  position: relative;
+  padding: 14px 18px 12px;
+  border-radius: 18px;
+  color: #fff4e6;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(160, 18, 38, 0.55), transparent 60%),
+    linear-gradient(135deg, rgba(40, 10, 20, 0.92), rgba(12, 8, 18, 0.94));
+  border: 1.5px solid var(--hsin-gold);
+  box-shadow:
+    inset 0 0 0 5px rgba(12, 8, 18, 0.6),
+    inset 0 0 0 6px var(--hsin-gold-soft),
+    0 14px 40px rgba(20, 0, 10, 0.45),
+    0 0 28px rgba(232, 160, 90, 0.25);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+}
+.hsin-dialog__frame::before,
+.hsin-dialog__frame::after {
+  content: '✦';
+  position: absolute;
+  top: -11px;
+  color: var(--hsin-gold);
+  font-size: 18px;
+  text-shadow: 0 0 10px rgba(255, 200, 120, 0.8);
+}
+.hsin-dialog__frame::before { left: 22px; }
+.hsin-dialog__frame::after { right: 22px; }
+.hsin-dialog__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.hsin-dialog__star {
+  color: var(--hsin-gold);
+  animation: hsin-twinkle 2.4s ease-in-out infinite;
+}
+.hsin-dialog__name {
+  font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: 0.5px;
+  color: #ffe9b8;
+  text-shadow: 0 0 14px rgba(255, 190, 90, 0.55);
+}
+.hsin-dialog__role {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: #f0b9a0;
+}
+.hsin-dialog__close {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--hsin-gold-soft);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffe9b8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.hsin-dialog__text {
+  min-height: 2.6em;
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #fff7ee;
+}
+.hsin-dialog__text::after {
+  content: '▾';
+  margin-left: 6px;
+  color: var(--hsin-gold);
+  animation: hsin-bob 1s ease-in-out infinite;
+  display: inline-block;
+}
+.hsin-dialog__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hsin-dialog__dots { display: flex; gap: 6px; margin-right: auto; }
+.hsin-dialog__dots i {
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  border: 1px solid var(--hsin-gold);
+  background: transparent;
+}
+.hsin-dialog__dots i.on { background: var(--hsin-gold); box-shadow: 0 0 8px rgba(255, 200, 120, 0.9); }
+.hsin-btn {
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: 700 13px 'Be Vietnam Pro', system-ui, sans-serif;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.hsin-btn:active { transform: scale(0.96); }
+.hsin-btn--ghost {
+  color: #ffe9b8;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hsin-gold-soft);
+}
+.hsin-btn--gold {
+  color: #3a0a12;
+  border: 1px solid #fff0c4;
+  background: linear-gradient(180deg, #ffe7a6, #e2a948 60%, #c98a2c);
+  box-shadow: 0 4px 14px rgba(232, 160, 60, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.hsin-btn--gold:hover { box-shadow: 0 6px 20px rgba(232, 160, 60, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+
+.hsin-shutter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 30;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 120px;
+  color: #ffe9b8;
+  text-shadow: 0 0 30px rgba(255, 180, 80, 0.9), 0 4px 18px rgba(80, 0, 20, 0.8);
+}
+.hsin-shutter.is-count { background: radial-gradient(circle, transparent 45%, rgba(20, 0, 10, 0.35)); }
+.hsin-shutter.pop { animation: hsin-pop 0.8s ease-out; }
+.hsin-shutter.is-flash { background: #fff; animation: hsin-flash 0.45s ease-out forwards; }
+
+@keyframes hsin-twinkle { 0%, 100% { opacity: 0.55; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes hsin-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+@keyframes hsin-pop { 0% { transform: scale(1.6); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0.2; } }
+@keyframes hsin-flash { from { opacity: 0.95; } to { opacity: 0; } }
+
+/* Touch screens: sit above the joystick. */
+@media (max-width: 768px), (pointer: coarse) {
+  .hsin-dialog { bottom: 132px; width: calc(100vw - 24px); }
+  .hsin-dialog__frame { padding: 11px 13px 10px; }
+  .hsin-dialog__name { font-size: 22px; }
+  .hsin-dialog__text { font-size: 15px; margin-bottom: 8px; }
+  .hsin-btn { padding: 7px 11px; font-size: 12px; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .hsin-dialog { bottom: 8px; left: auto; right: 8px; transform: translate(0, 24px); width: min(420px, calc(100vw - 156px)); }
+  .hsin-dialog.is-open { transform: translate(0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hsin-dialog, .hsin-dialog__star, .hsin-dialog__text::after, .hsin-shutter.pop { animation: none; transition: none; }
+}
+
+/* #hud > * turns pointer events on for every HUD child; keep the closed box and the shutter click-through. */
+#hud > .hsin-dialog:not(.is-open),
+#hud > .hsin-shutter { pointer-events: none; }
