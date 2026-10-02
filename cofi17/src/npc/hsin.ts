@@ -3,10 +3,12 @@ import type { CollisionWorld } from '../map/colliders';
 import { toWorldX, toWorldZ, type Rect } from '../map/coords';
 import type { Pathfinder, Point2D } from '../map/pathfinding';
 import { createAvatar, part } from '../player/avatar';
+import { toon, toonUnique } from '../scene/materials';
 import { FONT } from '../scene/signAtlas';
 
 /**
- * Cosplayer NPC: Phương Anh dressed as Jinhsi ("Hsin") from Wuthering Waves.
+ * Cosplayer NPC: Phương Anh as Hsin, a white-haired fox girl in a red and black dress over a
+ * pale blue underskirt, with fur trims, gold ornaments and a big white tail with a black tip.
  * She strolls the open floor in front of the main stage in Hall A3, stops to face the visitor
  * when they come close (or tap her), waves and talks through a speech bubble.
  */
@@ -26,77 +28,188 @@ const LINE_SECONDS = 2.8;
 const WALK_SPEED = 0.8;
 
 const COLORS = {
-  hair: '#eef0f7',
-  dress: '#fbf7ee',
-  gold: '#e3b65a',
-  teal: '#5fb8c9',
+  hair: '#f1f3f8',
+  fur: '#fbfaf7',
+  red: '#d4262f',
+  black: '#1f1b24',
+  underskirt: '#cfe7f1',
+  gold: '#e2b45c',
+  eyes: '#b23a48',
+  tailTip: '#2b2733',
 };
 
-/** Jinhsi-inspired costume on top of the shared toon character. */
+/** Swaps a shared toon material for another colour on the meshes of `group` (never mutates the shared one). */
+function recolor(group: THREE.Object3D, from: string, to: string) {
+  group.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshToonMaterial && o.material.color.getHexString() === from) {
+      o.material = toon(to);
+    }
+  });
+}
+
+/** Open, double-sided cone section (a skirt layer). `gap` leaves the front open by that many radians. */
+function skirtLayer(top: number, bottom: number, height: number, color: string, gap = 0) {
+  const geo = new THREE.CylinderGeometry(top, bottom, height, 28, 1, true, gap / 2, Math.PI * 2 - gap);
+  const mesh = part(geo, color);
+  mesh.material = toonUnique(color, { side: THREE.DoubleSide });
+  return mesh;
+}
+
+/** Fox ear: white cone with a black tip, flattened front to back. */
+function foxEar(sx: number) {
+  const ear = new THREE.Group();
+  const outer = part(new THREE.ConeGeometry(0.08, 0.22, 10), COLORS.fur);
+  outer.position.y = 0.11;
+  ear.add(outer);
+  const tip = part(new THREE.ConeGeometry(0.038, 0.1, 10), COLORS.black);
+  tip.position.y = 0.175;
+  ear.add(tip);
+  const inner = part(new THREE.ConeGeometry(0.05, 0.14, 8), '#ffe3ea', { outline: false });
+  inner.position.set(0, 0.08, 0.03);
+  ear.add(inner);
+  ear.scale.z = 0.55;
+  ear.position.set(sx * 0.12, 0.15, -0.02);
+  ear.rotation.set(-0.1, 0, -sx * 0.38);
+  return ear;
+}
+
+/** Gold four-pointed star ornament. */
+function goldStar(size: number) {
+  const star = part(new THREE.OctahedronGeometry(size), COLORS.gold, { outline: false });
+  star.scale.set(1, 1, 0.35);
+  return star;
+}
+
+/** Fox cosplay costume on top of the shared toon character. Returns the tail pivot for animation. */
 function dressAsHsin(root: THREE.Object3D) {
   const head = root.getObjectByName('head')!;
   const body = root.getObjectByName('body')!;
+  recolor(head, '2b2640', COLORS.eyes);
+  recolor(head, 'ff8fb8', COLORS.gold);
+  for (const name of ['leg-left', 'leg-right']) recolor(root.getObjectByName(name)!, '18171d', COLORS.red);
 
-  // Very long silver-white hair falling to the knees.
-  const hair = part(new THREE.CapsuleGeometry(0.16, 0.78, 6, 16), COLORS.hair);
-  hair.scale.set(1.08, 1, 0.48);
-  hair.position.set(0, -0.62, -0.13);
-  hair.rotation.x = 0.05;
-  head.add(hair);
+  // Head: fox ears, a bun at the back, wavy side locks and gold star clips with tassels.
   for (const sx of [-1, 1]) {
-    const lock = part(new THREE.CapsuleGeometry(0.045, 0.42, 4, 10), COLORS.hair);
-    lock.position.set(sx * 0.15, -0.3, 0.06);
-    lock.rotation.z = sx * 0.08;
-    head.add(lock);
-    // Golden wing-like hair ornaments behind the head.
-    const wing = part(new THREE.ConeGeometry(0.045, 0.26, 6), COLORS.gold);
-    wing.position.set(sx * 0.15, 0.12, -0.12);
-    wing.rotation.set(-0.5, 0, -sx * 0.9);
-    head.add(wing);
-    const tassel = part(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 6), COLORS.gold, { outline: false });
-    tassel.position.set(sx * 0.2, -0.08, -0.04);
+    head.add(foxEar(sx));
+    const pompom = part(new THREE.SphereGeometry(0.045, 12, 10), COLORS.fur);
+    pompom.position.set(sx * 0.17, 0.09, -0.02);
+    head.add(pompom);
+    const clip = goldStar(0.04);
+    clip.position.set(sx * 0.17, 0.13, 0.04);
+    head.add(clip);
+    const tassel = part(new THREE.CylinderGeometry(0.01, 0.01, 0.16, 6), COLORS.gold, { outline: false });
+    tassel.position.set(sx * 0.2, 0.02, 0.02);
     head.add(tassel);
-  }
-  const crown = part(new THREE.TorusGeometry(0.1, 0.018, 8, 24, Math.PI), COLORS.gold);
-  crown.position.set(0, 0.14, -0.13);
-  crown.rotation.x = -0.6;
-  head.add(crown);
-  const gem = part(new THREE.OctahedronGeometry(0.035), COLORS.teal);
-  gem.position.set(0, 0.2, -0.12);
-  head.add(gem);
-
-  // Gold trims on the white dress: collar, front panel, belt and hem.
-  const collar = part(new THREE.CylinderGeometry(0.07, 0.085, 0.07, 16), COLORS.gold);
-  collar.position.y = 1.35;
-  body.add(collar);
-  const panel = part(new THREE.BoxGeometry(0.07, 0.36, 0.02), COLORS.gold, { outline: false });
-  panel.position.set(0, 1.1, 0.112);
-  body.add(panel);
-  const belt = part(new THREE.TorusGeometry(0.152, 0.022, 8, 24), COLORS.gold);
-  belt.rotation.x = Math.PI / 2;
-  belt.position.y = 0.88;
-  body.add(belt);
-  const buckle = part(new THREE.OctahedronGeometry(0.04), COLORS.teal);
-  buckle.position.set(0, 0.88, 0.16);
-  body.add(buckle);
-  root.traverse((o) => {
-    if (o instanceof THREE.Mesh && o.userData.keep && o.userData.vendorPart === 'skirt') {
-      const hem = part(new THREE.TorusGeometry(0.27, 0.018, 6, 28), COLORS.gold, { outline: false });
-      hem.rotation.x = Math.PI / 2;
-      hem.position.y = -0.35;
-      o.add(hem);
+    const bead = part(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 8), COLORS.gold, { outline: false });
+    bead.position.set(sx * 0.2, -0.08, 0.02);
+    head.add(bead);
+    for (const [y, z] of [[-0.24, 0.05], [-0.4, 0.02]] as const) {
+      const wave = part(new THREE.SphereGeometry(0.055, 12, 10), COLORS.hair);
+      wave.scale.set(0.8, 1.3, 0.8);
+      wave.position.set(sx * (0.17 + (y < -0.3 ? 0.015 : 0)), y, z);
+      head.add(wave);
     }
+  }
+  const bun = part(new THREE.SphereGeometry(0.1, 16, 12), COLORS.hair);
+  bun.position.set(0, 0.14, -0.15);
+  head.add(bun);
+
+  // Bodice: black corset under a white fur off-shoulder trim, red choker with a gold pendant.
+  const fur = part(new THREE.TorusGeometry(0.17, 0.05, 10, 28), COLORS.fur);
+  fur.rotation.x = Math.PI / 2;
+  fur.scale.set(1.05, 0.82, 1);
+  fur.position.y = 1.26;
+  body.add(fur);
+  const choker = part(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 14), COLORS.red, { outline: false });
+  choker.position.y = 1.39;
+  body.add(choker);
+  const pendant = goldStar(0.022);
+  pendant.position.set(0, 1.35, 0.052);
+  body.add(pendant);
+
+  // Red sash with a bow at the waist and a gold tassel hanging in front.
+  const sash = part(new THREE.TorusGeometry(0.152, 0.026, 8, 24), COLORS.red);
+  sash.rotation.x = Math.PI / 2;
+  sash.position.y = 0.9;
+  body.add(sash);
+  for (const sx of [-1, 1]) {
+    const loop = part(new THREE.SphereGeometry(0.04, 10, 8), COLORS.red);
+    loop.scale.set(1.4, 0.8, 0.6);
+    loop.position.set(sx * 0.05, 0.92, 0.16);
+    body.add(loop);
+  }
+  const knot = goldStar(0.03);
+  knot.position.set(0, 0.92, 0.18);
+  body.add(knot);
+  const cord = part(new THREE.CylinderGeometry(0.008, 0.008, 0.3, 6), COLORS.gold, { outline: false });
+  cord.position.set(0, 0.74, 0.19);
+  body.add(cord);
+
+  // Skirt: the avatar's own skirt is the pale blue underskirt. Over it a red open-front robe with a
+  // black hem band, and a long black front panel trimmed in gold. Children of the skirt so they sway with it.
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || !o.userData.keep || o.userData.vendorPart !== 'skirt') return;
+    const robe = skirtLayer(0.165, 0.36, 0.72, COLORS.red, 1.1);
+    robe.position.y = 0.01;
+    o.add(robe);
+    const band = skirtLayer(0.33, 0.37, 0.12, COLORS.black, 1.1);
+    band.position.y = -0.31;
+    o.add(band);
+    const trim = skirtLayer(0.305, 0.31, 0.02, COLORS.gold, 1.1);
+    trim.position.y = -0.235;
+    o.add(trim);
+    const panel = part(new THREE.BoxGeometry(0.075, 0.7, 0.02), COLORS.black);
+    panel.rotation.x = -0.165;
+    panel.position.set(-0.03, 0, 0.215);
+    o.add(panel);
+    const edge = part(new THREE.BoxGeometry(0.09, 0.02, 0.025), COLORS.gold, { outline: false });
+    edge.rotation.x = -0.165;
+    edge.position.set(-0.03, -0.3, 0.27);
+    o.add(edge);
   });
 
-  // Floating golden halo, her signature motif.
-  const halo = new THREE.Mesh(
-    new THREE.TorusGeometry(0.34, 0.014, 8, 48),
-    new THREE.MeshBasicMaterial({ color: '#ffd77a', transparent: true, opacity: 0.85 }),
+  // Arms: white fur at the shoulder and a wide red sleeve hanging from the elbow.
+  for (const name of ['arm-left', 'arm-right']) {
+    const arm = root.getObjectByName(name)!;
+    const cuff = part(new THREE.SphereGeometry(0.075, 12, 10), COLORS.fur);
+    cuff.position.y = -0.03;
+    arm.add(cuff);
+    const sleeve = part(new THREE.CylinderGeometry(0.065, 0.13, 0.3, 14), COLORS.red);
+    sleeve.position.y = -0.27;
+    arm.add(sleeve);
+    const lining = part(new THREE.CylinderGeometry(0.131, 0.131, 0.03, 14), COLORS.fur, { outline: false });
+    lining.position.y = -0.41;
+    arm.add(lining);
+  }
+
+  // Big fluffy tail: white at the root, fading to a black tip, swaying from the lower back.
+  const tail = new THREE.Group();
+  tail.name = 'tail';
+  tail.position.set(0, 0.78, -0.17);
+  body.add(tail);
+  const curve = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0.18, -0.12, -0.42),
+    new THREE.Vector3(0.42, 0.42, -0.58),
   );
-  halo.position.set(0, 1.58, -0.32);
-  halo.raycast = () => {};
-  body.add(halo);
-  return halo;
+  const segments = 14;
+  const white = new THREE.Color(COLORS.fur);
+  const tip = new THREE.Color(COLORS.tailTip);
+  for (let i = 0; i < segments; i++) {
+    const t = i / (segments - 1);
+    const radius = 0.07 + Math.sin(Math.min(1, t * 1.15) * Math.PI) * 0.15 + t * 0.03;
+    const shade = THREE.MathUtils.smoothstep(t, 0.5, 0.92);
+    const puff = part(new THREE.SphereGeometry(radius, 14, 12), `#${white.clone().lerp(tip, shade).getHexString()}`);
+    puff.position.copy(curve.getPoint(t));
+    puff.scale.set(1, 0.9, 1);
+    tail.add(puff);
+  }
+  for (const t of [0.45, 0.8]) {
+    const star = goldStar(0.05);
+    star.position.copy(curve.getPoint(t)).add(new THREE.Vector3(0.12, 0.08, 0.1));
+    tail.add(star);
+  }
+  return tail;
 }
 
 /** Comic speech bubble with a tail, drawn to a canvas. */
@@ -179,15 +292,15 @@ export interface HsinNpc {
 export function buildHsin(pathfinder: Pathfinder, world: CollisionWorld): HsinNpc {
   const avatar = createAvatar('female', {
     hairStyle: 'long',
-    shirtStyle: 'button-up',
+    shirtStyle: 'tee',
     hairColor: COLORS.hair,
-    shirtColor: COLORS.dress,
-    bottomsColor: COLORS.dress,
+    shirtColor: COLORS.black,
+    bottomsColor: COLORS.underskirt,
     camera: false,
   });
   const root = avatar.root;
   root.name = 'npc-hsin';
-  const halo = dressAsHsin(root);
+  const tail = dressAsHsin(root);
   const armRight = root.getObjectByName('arm-right')!;
 
   const tag = nameTag();
@@ -282,8 +395,8 @@ export function buildHsin(pathfinder: Pathfinder, world: CollisionWorld): HsinNp
     avatar.animate(dt, speed);
     armRight.rotation.z = talking ? 2.4 + Math.sin(time * 7) * 0.25 : 0.1;
     if (talking) armRight.rotation.x = 0;
-    halo.rotation.z = time * 0.6;
-    halo.position.y = 1.58 + Math.sin(time * 1.8) * 0.03;
+    tail.rotation.y = Math.sin(time * 1.6) * 0.18 + Math.sin(time * 0.7) * 0.06;
+    tail.rotation.z = Math.sin(time * 1.6 + 0.8) * 0.05;
 
     const line = talking ? Math.floor((time - talkStart) / LINE_SECONDS) % HSIN_LINES.length : -1;
     bubbles.forEach((b, i) => { b.visible = i === line; });
