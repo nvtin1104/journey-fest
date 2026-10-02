@@ -204,7 +204,7 @@ Kết quả đã kiểm bằng test:
 
 1. **Mở trang**: chỉ tải `index` (app shell + data map, ~47 KB gzip) và `three` (chunk riêng, ~138 KB gzip, cache lâu dài).
    - Dựng phần **tổng quan**: sàn, tường, mái khu kín, và **khối màu giản lược** cho mọi gian/phòng/sân khấu, tất cả trong 1 draw call (`src/scene/proxies.ts`).
-   - Bảng Bắt đầu có sẵn trong `index.html` nên hiện ngay, trước khi JS chạy. Font tải không chặn hiển thị.
+   - Bảng Bắt đầu có sẵn trong `index.html` nên hiện ngay, trước khi JS chạy. Font Be Vietnam Pro được tự host (`@fontsource`, chỉ subset Latin + tiếng Việt, 3 độ đậm), `font-display: swap` nên không chặn hiển thị.
 2. **Bấm Bắt đầu**:
    - Tải chunk `experience` (~14 KB gzip; tải trước khi rê chuột lên nút).
    - Dựng chi tiết theo từng bước, mỗi bước nhường một frame và cập nhật thanh tiến độ: font, gian hàng, khu vực, bảng tên, nhân vật, biên dịch shader.
@@ -213,7 +213,7 @@ Kết quả đã kiểm bằng test:
 **Hiệu năng**:
 - Khoảng 250 draw call khi nhìn toàn cảnh cả map, tính cả shadow pass. Booth, viền tường, khung cửa, mái/cửa phòng đều instanced; chữ gộp theo trang atlas; nhân vật gộp theo vật liệu.
 - Bóng đổ chỉ phủ vùng quanh nhân vật, sương che phần xa.
-- Không tải asset ngoài ngoài font: nhân vật và props đều dựng từ primitive.
+- Không tải gì từ server khác: font tự host, nhân vật và props đều dựng từ primitive.
 
 ### Chất lượng đồ hoạ (`src/scene/quality.ts`)
 
@@ -249,6 +249,57 @@ Kết quả đã kiểm bằng test:
   - Khi trình duyệt trả context (`webglcontextrestored`) thì thông báo tự ẩn.
 - **Lỗi khi tải chi tiết** (mạng rớt khi tải chunk `experience`): bảng Bắt đầu báo lỗi và gợi ý tải lại trang.
 
+### Offline & cài vào màn hình chính (PWA)
+
+Service worker được `vite-plugin-pwa` (Workbox, `generateSW`) sinh khi build, cấu hình trong `vite.config.ts`.
+Phần đăng ký và giao diện nằm ở `src/ui/pwa.ts`.
+
+- **Precache toàn bộ app ngay lần mở đầu** (khoảng 34 file, 8 MB):
+  - Code: `index`, `three`, `experience`.
+  - CSS, 6 file font woff2.
+  - 7 sơ đồ mặt bằng, 5 poster, ảnh mẫu C17-C18, logo, icon.
+  - Từ lần sau mở được hoàn toàn khi không có mạng, kể cả khi chưa bấm Bắt đầu lúc còn mạng.
+  - Có toast "Đã lưu bản đồ…" khi lưu xong.
+- **Data map**:
+  - Snapshot nằm sẵn trong chunk `index`.
+  - Nếu build có `VITE_MAP_URL`: SW thêm `NetworkFirst` cho URL đó (timeout 5 s, cache `map-data`). Offline sẽ dùng bản live gần nhất; nếu chưa có bản nào thì `loadData()` dùng snapshot.
+- **Cập nhật** (`registerType: 'prompt'`):
+  - Bản mới được tải ngầm. App hiện toast "Đã có bản cập nhật" kèm nút **Cập nhật**, bấm thì kích hoạt bản mới và tải lại trang.
+  - Không tự `skipWaiting`, vì trang đang mở còn cần chunk `experience` cũ.
+  - Đóng hết tab thì lần mở sau tự dùng bản mới.
+  - App mở lâu (ngày sự kiện) tự kiểm tra bản mới mỗi giờ.
+- **Cài app**:
+  - Chrome/Edge/Samsung Internet: bắt `beforeinstallprompt`, hiện nút "Cài vào màn hình chính" trên màn Bắt đầu và trong menu ⚙.
+  - iPhone/iPad: Safari không có prompt, nên hiện hướng dẫn "Chia sẻ → Thêm vào MH chính".
+  - Trình duyệt trong app (Facebook, Messenger, Instagram, Zalo) không cài được: nhắc mở bằng Safari/Chrome.
+  - Logic nhận biết là hàm thuần `installHint()` (`src/ui/installHint.ts`), có test.
+  - Khi đã chạy dạng app (`display-mode: standalone`) thì ẩn hết.
+- **Manifest**:
+  - `display: standalone`, `theme_color` `#5b45c9`, `background_color` `#f3ecff`.
+  - Icon: `favicon-192.png`, `icons/icon-512.png`, `icons/maskable-512.png` (logo nằm trong vùng an toàn 80%).
+  - `apple-touch-icon.png` có nền trắng vì iOS tô đen phần trong suốt.
+  - Các icon 512 được phóng to từ bản 192. Khi có file logo gốc độ phân giải cao thì nên dựng lại.
+- **Deploy**:
+  - Cần HTTPS (Cloudflare Pages đạt yêu cầu).
+  - `public/_headers` đặt `no-cache` cho `/sw.js` và `/manifest.webmanifest` để bản mới tới được máy đã cài.
+- **Giới hạn**: Workbox bỏ qua file trên 3 MB (`maximumFileSizeToCacheInBytes`) và in cảnh báo lúc build. Ảnh lớn phải nén trước.
+
+### Ảnh
+
+Mọi ảnh đều được lưu trên máy khách, nên phải nhẹ.
+
+- **Quy ước**: WebP, mỗi file dưới khoảng 1.5 MB.
+- **Lệnh nén**: `pnpm image <vào> <ra.webp> [--max px] [--quality q]` (`scripts/optimize-image.mjs`, dùng sharp).
+- **Đã áp dụng**:
+
+  | Ảnh | Trước | Sau |
+  |---|---|---|
+  | 7 sơ đồ (3770 px, giữ nguyên độ phân giải, q82) | 52 MB | 4.2 MB |
+  | 5 poster (giữ kích thước, q88) | 8 MB | 0.9 MB |
+  | Ảnh mẫu C17-C18 (PNG 6004 px) | 25 MB | 1.1 MB (bản 3072 px cho trình xem) + 0.2 MB (bản 1024 px làm texture) |
+
+- **Texture trong cảnh 3D**: dùng bản nhỏ để GPU điện thoại không phải giải nén ảnh hàng chục megapixel.
+
 ## 11. Cấu trúc code
 
 ```
@@ -276,6 +327,10 @@ src/
     signAtlas.ts        atlas chữ cho bảng tên
   player/               nhân vật nam/nữ, điều khiển (thường + theo hướng đi), camera
   ui/                   màn bắt đầu, HUD + menu cài đặt, lưu lựa chọn (prefs.ts), CSS
+    pwa.ts              đăng ký service worker, toast offline/cập nhật, nút cài app
+    installHint.ts      chọn hướng dẫn cài theo thiết bị (iPhone, trình duyệt trong app)
+scripts/
+  optimize-image.mjs    nén ảnh sang WebP (`pnpm image`)
 ```
 
 ## 12. Hướng mở rộng

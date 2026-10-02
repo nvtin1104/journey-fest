@@ -4,6 +4,13 @@
  * and the HUD live in `experience.ts`, fetched as a separate chunk when the visitor presses Start.
  */
 import * as THREE from 'three';
+// Self-hosted font (Latin + Vietnamese, the three weights in use) so signs render the same offline.
+import '@fontsource/be-vietnam-pro/latin-400.css';
+import '@fontsource/be-vietnam-pro/latin-700.css';
+import '@fontsource/be-vietnam-pro/latin-800.css';
+import '@fontsource/be-vietnam-pro/vietnamese-400.css';
+import '@fontsource/be-vietnam-pro/vietnamese-700.css';
+import '@fontsource/be-vietnam-pro/vietnamese-800.css';
 import './ui/style.css';
 import snapshot from './data/event-map.json';
 import type { EventMapData } from './data/types';
@@ -17,6 +24,7 @@ import { detectQuality, QualityManager, readDeviceHints, type QualityMode } from
 import { createScene, followSun, hasWebGL2 } from './scene/setup';
 import { buildWalls } from './scene/walls';
 import { loadPref } from './ui/prefs';
+import { setupPwa } from './ui/pwa';
 import { setupStartScreen } from './ui/start';
 import type { Experience } from './experience';
 
@@ -43,6 +51,7 @@ async function loadData(): Promise<EventMapData> {
 /** Late-bound hooks so the start screen can exist before the scene does. */
 let onStartPressed: (gender: 'male' | 'female') => void = () => {};
 const start = setupStartScreen((gender) => onStartPressed(gender));
+setupPwa();
 
 async function main() {
   const app = document.getElementById('app')!;

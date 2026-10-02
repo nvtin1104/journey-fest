@@ -15,6 +15,8 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #f3ecff;
+  /* No pull-to-refresh or rubber-band bounce when the map runs as an installed app. */
+  overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -319,6 +321,21 @@ html, body {
 .start.loading .progress { visibility: visible; }
 .progress > div { width: 0; height: 100%; background: var(--accent); transition: width 0.25s; }
 .start-error { margin: 12px 0 0; color: #b33b3b; font-size: 13px; line-height: 1.5; }
+.install-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--accent);
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.install-btn[hidden], .install-hint[hidden] { display: none; }
+.start .install-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 .notice {
   position: fixed;
@@ -1096,3 +1113,51 @@ button { touch-action: manipulation; }
   .start #start-btn { padding:9px 12px; min-height:36px; border-radius:10px; font-size:13px; }
   .start .progress { margin-top:6px; height:4px; }
 }
+
+/* Offline / update notices (src/ui/pwa.ts). Above the start panel and every dialog. */
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 12px 10px 16px;
+  border-radius: 14px;
+  background: #2b2a4a;
+  box-shadow: var(--shadow);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  transform: translateX(-50%);
+}
+.app-toast[hidden] { display: none; }
+.app-toast button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+  color: var(--accent);
+  cursor: pointer;
+}
+.settings-install {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+}
+.settings-install[hidden], .settings-row[hidden], .install-note:empty { display: none; }
+.settings-app { margin: 10px 0 0; }
+.install-note { margin-top: 4px; line-height: 1.45; }

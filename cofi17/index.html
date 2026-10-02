@@ -8,10 +8,10 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Color Fiesta · Bản đồ 3D</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Non-blocking font: the start screen paints with the system font and swaps when ready. -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800&display=swap" media="print" onload="this.media='all'" />
+    <meta name="theme-color" content="#5b45c9" />
+    <!-- Installed to the home screen (the manifest is injected by vite-plugin-pwa at build time). -->
+    <meta name="apple-mobile-web-app-title" content="Color Fiesta" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   </head>
   <body>
     <div id="app"></div>
@@ -48,8 +48,11 @@
         <button id="start-btn" type="button" disabled>Đang tải bản đồ…</button>
         <div class="progress"><div></div></div>
         <p class="start-error" role="alert" hidden></p>
+        <button id="install-btn" class="install-btn" type="button" hidden>Cài vào màn hình chính</button>
+        <p id="install-hint" class="install-hint" hidden></p>
       </div>
     </div>
+    <div id="app-toast" class="app-toast" role="status" aria-live="polite" hidden></div>
     <div id="notice" class="notice" role="alert" hidden>
       <div class="notice-card">
         <b>Đồ hoạ tạm dừng</b>

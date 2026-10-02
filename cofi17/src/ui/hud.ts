@@ -2,6 +2,7 @@ import { toMapX, toMapY, type Rect } from '../map/coords';
 
 import type { Gender } from '../player/avatar';
 import { QUALITY, type QualityLevel, type QualityMode } from '../scene/quality';
+import { installer, installHintText } from './pwa';
 import type { ParsedMap, Stand } from '../map/parse';
 import { wallRect } from '../map/walls';
 import { WALL_T } from '../map/parse';
@@ -236,6 +237,17 @@ export class Hud {
     }
     this.qualityNote = el('div', 'card-sub');
     this.settings.append(this.qualityNote);
+    // Home-screen install: the browser's prompt when it offers one, otherwise manual steps (iPhone).
+    const app = el('div', 'settings-row settings-app');
+    const installBtn = el('button', 'settings-install', 'Cài vào màn hình chính');
+    installBtn.addEventListener('click', () => void installer.prompt());
+    const hintText = installHintText();
+    app.append(el('div', 'card-sub', 'Ứng dụng'), installBtn, el('div', 'card-sub install-note', hintText ?? ''));
+    this.settings.append(app);
+    installer.onChange(() => {
+      installBtn.hidden = !installer.available;
+      app.hidden = !installer.available && !hintText;
+    });
     gear.addEventListener('click', () => {
       this.settings.hidden = !this.settings.hidden;
       gear.classList.toggle('active', !this.settings.hidden);
