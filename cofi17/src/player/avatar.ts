@@ -112,7 +112,8 @@ interface PartOptions {
   shadow?: boolean;
 }
 
-function part(geo: THREE.BufferGeometry, color: string, opts: PartOptions = {}) {
+/** A toon-shaded mesh with the character outline; exported so special NPCs can add costume pieces. */
+export function part(geo: THREE.BufferGeometry, color: string, opts: PartOptions = {}) {
   const mesh = new THREE.Mesh(geo, toon(color));
   mesh.castShadow = opts.shadow ?? true;
   if (opts.outline ?? true) {

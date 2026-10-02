@@ -20,6 +20,7 @@ import { buildStands, standFront, standSize } from './scene/booths';
 import { NavigationVisualizer } from './scene/navigation';
 import { buildEntrancePosters } from './scene/posters';
 import { buildVendors } from './scene/vendors';
+import { buildHsin } from './npc/hsin';
 import { buildBoothSample, FEATURED_STAND_ID } from './booth/C17-C18/component';
 import { QUALITY, type QualityManager } from './scene/quality';
 import type { SceneContext } from './scene/setup';
@@ -74,6 +75,9 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   detail.add(buildStands(map, atlas));
   const vendors = buildVendors(map.stands, map, pathfinder, world);
   detail.add(vendors.group);
+  // Cosplayer NPC strolling in front of the main stage.
+  const hsin = buildHsin(pathfinder, world);
+  detail.add(hsin.root);
   const featuredStand = map.stands.find((stand) => stand.id === FEATURED_STAND_ID);
   const boothSample = featuredStand ? buildBoothSample(featuredStand) : null;
   if (boothSample) detail.add(boothSample.group);
@@ -369,6 +373,13 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     raycaster.setFromCamera(ndc, camera);
     // Pick the nearest rendered surface, rather than projecting through the booth onto the floor.
     const surfaceHit = raycaster.intersectObject(detail, true).find(hit => hit.object instanceof THREE.Mesh);
+    const hsinHit = raycaster.intersectObject(hsin.root, true).find(hit => hit.object instanceof THREE.Mesh);
+    if (hsinHit && (!surfaceHit || hsinHit.distance <= surfaceHit.distance + 0.02)) {
+      walkingRoute = [];
+      player.stopWalking();
+      hud.showToast(`Hsin · Phương Anh: “${hsin.talk(clock)}”`);
+      return;
+    }
     const sampleTargets = [...(boothSample?.targets ?? []), ...(a9Booth?.targets ?? [])];
     if (sampleTargets.length) {
       const sampleHit = raycaster.intersectObjects(sampleTargets, false)[0];
@@ -507,8 +518,10 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   o.onProgress(1, 'Sẵn sàng');
   let lastProbe = -1;
   let current: Stand | null = null;
+  let clock = 0;
 
   const update = (dt: number, t: number) => {
+    clock = t;
     if (player.hasInput) {
       walkingRoute = [];
       follow.skipIntro();
@@ -521,6 +534,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     areas.update(t);
     vendors.update(t, follow.isInspecting() ? focusedVendorId : null);
     boothSample?.update(t);
+    hsin.update(dt, t, player.position);
     navigation.update(t);
 
     if (t - lastProbe > 0.1) {
@@ -573,6 +587,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     startNavigation,
     cancelNavigation,
     switchCharacter,
+    hsin,
   });
 
   return { player, update };
