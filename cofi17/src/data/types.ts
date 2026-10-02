@@ -31,7 +31,7 @@ export interface MapGroup {
 }
 
 export interface EventMapData {
-  meta: { eventId: string; gridSize: number; version?: number; updatedAt?: string };
+  meta: { eventId: string; gridSize: number; version?: number; updatedAt?: string; referenceImages?: string[] };
   nodes: MapNode[];
   edges: MapEdge[];
   groups: MapGroup[];

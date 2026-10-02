@@ -61,6 +61,7 @@ export interface ParsedMap {
   signParts: Rect[];
   props: Prop[];
   groups: MapGroup[];
+  referenceImages?: string[];
   bounds: Rect;
 }
 
@@ -261,6 +262,7 @@ export function parseMap(data: EventMapData): ParsedMap {
   return {
     halls: hallsOut, gates, walls, doors, stands, rooms, billboards, columns, grounds, zones, stages, highlights, signParts, props,
     groups: [...data.groups].sort((a, b) => a.sortOrder - b.sortOrder),
+    referenceImages: data.meta.referenceImages,
     bounds,
   };
 }

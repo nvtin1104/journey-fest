@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { ParsedMap } from '../map/parse';
 import { toWorldX, toWorldZ, worldRect } from '../map/coords';
 
-const posters = [
+const guidePages = [
   { url: '/posters/cofi-timeline.png', title: 'Cẩm nang đi COFI · Timeline và lưu ý', tab: 'Timeline & lưu ý' },
   { url: '/posters/cofi-packing.png', title: 'Cẩm nang đi COFI · Vật dụng nên mang theo', tab: 'Vật dụng mang theo' },
   { url: '/posters/cofi-stage-saturday.png', title: 'Lịch trình sân khấu · Thứ Bảy', tab: 'Thứ Bảy' },
@@ -10,8 +10,16 @@ const posters = [
   { url: '/posters/cofi-activities.png', title: 'Lịch trình hoạt động · Cả hai ngày', tab: 'Hoạt động' },
 ];
 
-/** Entrance posters and two readable guide sheets on the first check-in desk. */
+/** Entrance guides plus floor-map printouts and an enlarged viewer at the check-in desks. */
 export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.Vector3, tabletop: boolean) => void, onReturn: () => void) {
+  const mapPages = (map.referenceImages ?? []).map((path, index) => {
+    const assetPath = path.startsWith('public/') ? path.slice('public'.length) : path;
+    const url = /^https?:\/\//i.test(assetPath) ? assetPath : encodeURI(assetPath.startsWith('/') ? assetPath : `/${assetPath}`);
+    return { url, title: `Sơ đồ mặt bằng · Khu vực ${index + 1}`, tab: `Sơ đồ ${index + 1}`, ratio: 3770 / 3650 };
+  });
+  const pages = [...guidePages.map((page, index) => ({ ...page, ratio: index < 2 ? 434 / 590 : 1392 / 2048 })), ...mapPages];
+  const categoryOf = (index: number) => index < 2 ? 'guides' : index < guidePages.length ? 'schedule' : 'map';
+  const categoryPages = (index: number) => pages.map((_, i) => i).filter((i) => categoryOf(i) === categoryOf(index));
   const group = new THREE.Group();
   group.name = 'checkin-posters';
   const targets: THREE.Mesh[] = [];
@@ -32,7 +40,7 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
   tabs.className = 'poster-tabs';
   const tabButtons: HTMLButtonElement[] = [];
   const show = (index: number) => {
-    const poster = posters[index];
+    const poster = pages[index];
     if (!poster) return;
     title.textContent = poster.title;
     dialog.setAttribute('aria-label', poster.title);
@@ -40,12 +48,12 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
     image.alt = poster.title;
     tabButtons.forEach((button, i) => {
       button.setAttribute('aria-pressed', String(i === index));
-      button.hidden = (i < 2) !== (index < 2);
+      button.hidden = categoryOf(i) !== categoryOf(index);
     });
   };
-  posters.forEach((_, index) => {
+  pages.forEach((_, index) => {
     const button = document.createElement('button');
-    button.textContent = posters[index].tab;
+    button.textContent = pages[index].tab;
     button.addEventListener('click', () => show(index));
     tabButtons.push(button);
     tabs.append(button);
@@ -54,21 +62,42 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
   document.body.append(dialog);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   const loader = new THREE.TextureLoader();
-  const textures = posters.map((poster) => {
-    const texture = loader.load(poster.url);
+  const textures = pages.map((poster, index) => {
+    const texture = index < guidePages.length ? loader.load(poster.url) : new THREE.Texture();
     texture.colorSpace = THREE.SRGBColorSpace;
+    if (index >= guidePages.length) {
+      // Downsample the large map scans before uploading them to the GPU.
+      const source = new Image();
+      source.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 990;
+        canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height);
+        texture.image = canvas;
+        texture.needsUpdate = true;
+      };
+      source.src = poster.url;
+    }
     return texture;
   });
   const desks = map.props.filter((prop) => prop.kind === 'checkin-desk');
-  // Swap the desk collections: schedules on desk one, guides on desk two.
-  desks.slice(0, 2).forEach((desk, deskIndex) => {
+  // Floor maps and the three original schedule sheets belong on the largest desk;
+  // smaller desks keep the two original guide sheets.
+  const largeDeskIndex = desks.reduce((largest, desk, index) =>
+    worldRect(desk.rect).w > worldRect(desks[largest].rect).w ? index : largest, 0);
+  desks.forEach((desk, deskIndex) => {
     const { cx, cz, w, d } = worldRect(desk.rect);
-    const indices = deskIndex === 0 ? [2, 3, 4] : [0, 1];
+    const indices = mapPages.length
+      ? deskIndex === largeDeskIndex
+        ? [...[2, 3, 4], ...mapPages.map((_, index) => guidePages.length + index)]
+        : [0, 1]
+      : deskIndex === 0 ? [2, 3, 4] : [0, 1];
     const paperWidth = Math.min(0.44, (w - 0.1) / indices.length - 0.06);
-    const paperHeight = Math.min(0.6, d * 0.6);
+    const paperHeight = Math.min(0.6, d * 0.6, paperWidth / 0.7);
     indices.forEach((index, slot) => {
-      const height = Math.min(paperHeight, paperWidth * (index < 2 ? 590 / 434 : 2048 / 1392));
-      const width = height / (index < 2 ? 590 / 434 : 2048 / 1392);
+      const ratio = pages[index].ratio;
+      const width = Math.min(paperWidth, paperHeight * ratio);
+      const height = width / ratio;
       const x = cx + (slot - (indices.length - 1) / 2) * (paperWidth + 0.08);
       const z = cz + d * 0.2;
       const paper = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: textures[index], side: THREE.DoubleSide }));
@@ -83,7 +112,7 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
     });
   });
   if (door) {
-    posters.forEach((_, index) => {
+    guidePages.forEach((_, index) => {
       const x = index < 2
         ? toWorldX(door.to) + 0.9 + index * 1.75
         : toWorldX(door.from) - 0.9 - (index - 2) * 1.75;
@@ -112,14 +141,15 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
   };
   const inspect = (mesh: THREE.Object3D) => {
     const index = mesh.userData.posterIndex as number;
-    if (!posters[index]) return;
+    if (!pages[index]) return;
     pill.hidden = true;
     onFocus(mesh.position.clone(), mesh.rotation.x !== 0);
     panel.replaceChildren();
     const head = document.createElement('div');
     head.className = 'card-head';
     const heading = document.createElement('strong');
-    heading.textContent = index < 2 ? 'Cẩm nang đi COFI' : 'Lịch trình sự kiện';
+    heading.textContent = categoryOf(index) === 'guides' ? 'Cẩm nang đi COFI'
+      : categoryOf(index) === 'schedule' ? 'Lịch trình sự kiện' : 'Sơ đồ khu vực';
     const dismiss = document.createElement('button');
     dismiss.className = 'card-close';
     dismiss.textContent = '×';
@@ -128,9 +158,9 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
     head.append(heading, dismiss);
     const actions = document.createElement('div');
     actions.className = 'card-actions';
-    (index < 2 ? [0, 1] : [2, 3, 4]).forEach((i) => {
+    categoryPages(index).forEach((i) => {
       const button = document.createElement('button');
-      button.textContent = posters[i].tab;
+      button.textContent = pages[i].tab;
       button.className = 'act-loc';
       button.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -162,7 +192,11 @@ export function buildEntrancePosters(map: ParsedMap, onFocus: (position: THREE.V
         if (d < distance) { distance = d; nearby = mesh; }
       }
       pill.hidden = !nearby || blocked || panel.classList.contains('show') || dialog.open;
-      if (nearby) pill.textContent = nearby.userData.posterIndex < 2 ? 'Cẩm nang · Chạm để xem' : 'Lịch trình · Chạm để xem';
+      if (nearby) {
+        const category = categoryOf(nearby.userData.posterIndex as number);
+        pill.textContent = category === 'guides' ? 'Cẩm nang · Chạm để xem'
+          : category === 'schedule' ? 'Lịch trình · Chạm để xem' : 'Sơ đồ mặt bằng · Chạm để xem';
+      }
     },
   };
 }
