@@ -8,6 +8,25 @@ const signature = offlineAssets.reduce((hash, entry) => {
   return hash;
 }, 7);
 const cacheName = `${cachePrefix}${Math.abs(signature).toString(36)}`;
+const shellUrl = new URL('/', self.location.origin).href;
+const indexUrl = new URL('/index.html', self.location.origin).href;
+
+// Cloudflare Pages answers `/index.html` with a redirect to `/`. A response that went through
+// a redirect is rejected by the browser when used for a page navigation ("This site can't be
+// reached"), so store and serve a plain copy of the body instead.
+async function unredirected(response) {
+  if (!response.redirected) return response;
+  return new Response(await response.blob(), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+async function savedShell() {
+  const shell = (await caches.match(shellUrl)) ?? (await caches.match(indexUrl));
+  return shell ? unredirected(shell) : undefined;
+}
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
@@ -23,13 +42,13 @@ self.addEventListener('message', (event) => {
   event.waitUntil((async () => {
     try {
       const cache = await caches.open(cacheName);
-      // The installed app may launch at `/` while the precache entry is `/index.html`.
+      // The installed app launches at `/` while the precache entry is `/index.html`.
       // Save both URL forms so a cold offline launch can always find the app shell.
-      const shellUrl = new URL('/index.html', self.location.origin).href;
-      const shellResponse = await fetch(shellUrl, { cache: 'reload' });
-      if (!shellResponse.ok) throw new Error(`Failed to save app shell (${shellResponse.status})`);
-      await cache.put(shellUrl, shellResponse.clone());
-      await cache.put(new URL('/', self.location.origin).href, shellResponse);
+      const fetched = await fetch(shellUrl, { cache: 'reload' });
+      if (!fetched.ok) throw new Error(`Failed to save app shell (${fetched.status})`);
+      const shellResponse = await unredirected(fetched);
+      await cache.put(indexUrl, shellResponse.clone());
+      await cache.put(shellUrl, shellResponse);
       let next = 0;
       let completed = 0;
       let failure = null;
@@ -46,7 +65,7 @@ self.addEventListener('message', (event) => {
             if (!cached) {
               const response = await fetch(assetUrl, { cache: 'reload' });
               if (!response.ok) throw new Error(`Failed to save ${url} (${response.status})`);
-              await cache.put(assetUrl, response);
+              await cache.put(assetUrl, await unredirected(response));
             }
             completed++;
             port.postMessage({ type: 'OFFLINE_PROGRESS', completed, total });
@@ -87,13 +106,17 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
-      const shell = await caches.match(new URL('/', self.location.origin).href)
-        ?? await caches.match(new URL('/index.html', self.location.origin).href);
+      const shell = await savedShell();
       try {
-        const response = await fetch(request);
+        // On a weak connection don't leave the visitor on a blank screen: fall back to the
+        // saved shell if the network hasn't answered in a few seconds.
+        const network = fetch(request);
+        const response = shell
+          ? await Promise.race([network, new Promise((resolve) => setTimeout(resolve, 4000))])
+          : await network;
         // Cloudflare or an intermediary can return an error page instead of rejecting fetch.
         // Treat those responses as a network failure and use the saved app shell.
-        if (response.ok) return response;
+        if (response?.ok) return response;
       } catch {
         // Continue to the saved shell below.
       }
