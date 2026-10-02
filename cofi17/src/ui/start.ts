@@ -19,7 +19,7 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
   const panel = document.getElementById('start')!;
   const button = panel.querySelector<HTMLButtonElement>('#start-btn')!;
   const bar = panel.querySelector<HTMLElement>('.progress > div')!;
-  const instruction = panel.querySelector<HTMLElement>('.start-card > p:not(.event-description)');
+  const instruction = panel.querySelector<HTMLElement>('.start-card > p');
   const picks = [...panel.querySelectorAll<HTMLButtonElement>('[data-gender]')];
 
   const savedGender = loadPref('gender');

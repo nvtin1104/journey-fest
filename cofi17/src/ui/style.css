@@ -262,42 +262,40 @@ html, body {
 .start { box-sizing:border-box; overflow-y:auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 .start .start-card { box-sizing:border-box; max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y:auto; overscroll-behavior:contain; flex-shrink:0; }
 .start-card {
-  width: min(420px, 100%);
-  padding: 20px 20px 16px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
+  width: min(380px, 100%);
+  padding: 18px 18px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   text-align: center;
 }
 .start-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
+  justify-content: center;
+  margin-bottom: 8px;
 }
-.start p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-.gender { display: flex; gap: 10px; justify-content: center; margin-bottom: 14px; }
+.start p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.gender { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
 .gender button {
   flex: 1;
-  max-width: 150px;
+  max-width: 140px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 8px 8px;
+  gap: 3px;
+  padding: 8px 6px 6px;
   border: 3px solid transparent;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #f4eeff;
   font: inherit;
   font-weight: 800;
   color: var(--ink);
   cursor: pointer;
 }
-.gender button svg { width: 64px; height: 64px; }
+.gender button svg { width: 52px; height: 52px; }
 .gender button[aria-pressed='true'] { border-color: var(--accent); background: #eeeaff; }
 .gender button:disabled { cursor: default; }
 #start-btn {
@@ -1102,7 +1100,7 @@ button { touch-action: manipulation; }
 .poster-inspection .card-actions button { min-width:0; font-size:11px; padding:6px 8px; }
 
 .site-logo { display:block; width:100px; height:auto; object-fit:contain; }
-.start-brand .site-logo { width:108px; height:auto; max-height:44px; }
+.start-brand .site-logo { width:120px; height:auto; max-height:48px; }
 @media (max-width:768px), (pointer:coarse) { .brand .site-logo { width:72px; } }
 
 .start .event-description { font-size:11px; line-height:1.5; margin:6px 0 10px; }
