@@ -1,6 +1,7 @@
 import { toMapX, toMapY, type Rect } from '../map/coords';
 
 import type { Gender } from '../player/avatar';
+import { SPAWN } from '../config';
 import { QUALITY, type QualityLevel, type QualityMode } from '../scene/quality';
 import { applyAvailableUpdate, checkForUpdate, installer, installHintText, isStandalone, onUpdateAvailable, prepareOffline } from './pwa';
 import type { ParsedMap, Stand } from '../map/parse';
@@ -9,6 +10,8 @@ import { WALL_T } from '../map/parse';
 
 import { createBoothDetails } from '../booth/C17-C18/details';
 import { boothConfig } from '../booth/C17-C18/config';
+import { createBoothDetails as createA9BoothDetails } from '../booth/A9/details';
+import { boothConfig as a9BoothConfig } from '../booth/A9/config';
 import {
   makeIcon,
   Compass,
@@ -21,8 +24,8 @@ import {
   Sparkles,
 
   Settings,
-  RotateCw,
-  Check,
+  Maximize,
+  Minimize,
   Route,
 } from './icons';
 
@@ -39,6 +42,8 @@ export interface HudCallbacks {
   onCancelNavigation: () => void;
   onBeginWalking: () => void;
   onTeleportToStand: (s: Stand) => void;
+  onSetCurrentLocation: (s: Stand) => void;
+  onSetOriginPoint: (mapX: number, mapY: number) => boolean;
   onToggleCameraTarget: () => void;
 }
 
@@ -103,7 +108,7 @@ export class Hud {
   private overviewBtn: HTMLButtonElement;
   private mapModal: HTMLDialogElement;
   private expandedMap: HTMLCanvasElement;
-  private rotateBtn: HTMLButtonElement;
+  private fullscreenBtn: HTMLButtonElement;
   private settings: HTMLElement;
   private genderBtns = new Map<Gender, HTMLButtonElement>();
   private qualityBtns = new Map<QualityMode, HTMLButtonElement>();
@@ -197,12 +202,14 @@ export class Hud {
       this.cb.onGoEntrance();
     });
 
-    // Nút Xoay màn hình (Mobile & Desktop)
-    this.rotateBtn = el('button', undefined);
-    this.rotateBtn.append(makeIcon(RotateCw, 14), el('span', 'button-label', 'Xoay'));
-    this.rotateBtn.title = 'Xoay màn hình ngang/dọc';
-    this.rotateBtn.setAttribute('aria-label', this.rotateBtn.title);
-    this.rotateBtn.addEventListener('click', () => this.toggleOrientation());
+    // Nút phóng to / thu nhỏ màn hình.
+    this.fullscreenBtn = el('button', undefined);
+    this.updateFullscreenButton();
+    this.fullscreenBtn.addEventListener('click', () => void this.toggleFullscreen());
+    document.addEventListener('fullscreenchange', () => {
+      this.updateFullscreenButton();
+      window.dispatchEvent(new Event('resize'));
+    });
 
     // Nút Cài đặt
     const gear = el('button', 'icon');
@@ -228,11 +235,25 @@ export class Hud {
       if (updateStatus) updateStatus.textContent = available ? 'Có bản cập nhật mới.' : 'Chưa có bản cập nhật mới.';
     });
 
-    buttons.append(this.overviewBtn, entrance, this.rotateBtn, gear, downloadMenuBtn);
+    buttons.append(this.overviewBtn, entrance, this.fullscreenBtn, gear, downloadMenuBtn);
 
     // Settings popover: character and graphics quality.
     this.settings = el('div', 'settings');
     this.settings.hidden = true;
+    const settingsHead = el('div', 'settings-head');
+    const settingsClose = el('button', 'card-close');
+    settingsClose.type = 'button';
+    settingsClose.title = 'Đóng cài đặt';
+    settingsClose.setAttribute('aria-label', 'Đóng cài đặt');
+    settingsClose.append(makeIcon(X, 18));
+    settingsClose.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.settings.hidden = true;
+      gear.classList.remove('active');
+      gear.focus();
+    });
+    settingsHead.append(el('div', 'card-title', 'Cài đặt'), settingsClose);
+    this.settings.append(settingsHead);
     const row = (title: string) => {
       const r = el('div', 'settings-row');
       r.append(el('div', 'card-sub', title));
@@ -595,7 +616,10 @@ export class Hud {
   }
 
   setGender(gender: Gender) {
-    for (const [g, b] of this.genderBtns) b.classList.toggle('active', g === gender);
+    for (const [g, b] of this.genderBtns) {
+      b.classList.toggle('active', g === gender);
+      b.setAttribute('aria-pressed', String(g === gender));
+    }
   }
 
   setQuality(mode: QualityMode, level: QualityLevel) {
@@ -724,6 +748,9 @@ export class Hud {
     if (s.id === boothConfig.id) {
       this.card.append(createBoothDetails(s));
     }
+    if (s.id === a9BoothConfig.id) {
+      this.card.append(createA9BoothDetails(s));
+    }
 
     // Groups
     if (s.groups.length) {
@@ -752,7 +779,7 @@ export class Hud {
       const originText = el('span');
       originText.innerHTML = `Xuất phát: <b>${this.currentOriginLabel}</b>`;
       const changeBtn = el('button', 'btn-change-origin');
-      changeBtn.append(makeIcon(MapPin, 13), document.createTextNode(' Teleport qua chi tiết'));
+      changeBtn.append(makeIcon(MapPin, 13), document.createTextNode(' Chọn vị trí hiện tại'));
       changeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.openLocationModal('set-origin');
@@ -897,7 +924,7 @@ export class Hud {
     originText.innerHTML = `Xuất phát: <b>${this.currentOriginLabel}</b>`;
 
     const changeOriginBtn = el('button', 'btn-change-origin');
-    changeOriginBtn.append(makeIcon(MapPin, 13), document.createTextNode(' Chọn gian đang đứng'));
+    changeOriginBtn.append(makeIcon(MapPin, 13), document.createTextNode(' Chọn vị trí hiện tại'));
     changeOriginBtn.title = 'Chọn gian hàng bạn đang đứng làm điểm xuất phát';
     changeOriginBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -942,8 +969,7 @@ export class Hud {
   }
 
   showToast(message: string) {
-    this.toastEl.innerHTML = '';
-    this.toastEl.append(makeIcon(Check, 15), document.createTextNode(` ${message}`));
+    this.toastEl.textContent = message;
     this.toastEl.classList.add('show');
     clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => {
@@ -961,7 +987,7 @@ export class Hud {
     const card = el('div', 'location-card');
     const header = el('div', 'loc-header');
     const title = el('h2');
-    title.append(makeIcon(MapPin, 18), document.createTextNode(' Tìm gian để teleport'));
+    title.append(makeIcon(MapPin, 18), document.createTextNode(' Chọn vị trí hiện tại'));
     const closeBtn = el('button', 'card-close');
     closeBtn.append(makeIcon(X, 16));
     closeBtn.addEventListener('click', () => {
@@ -969,9 +995,34 @@ export class Hud {
     });
     header.append(title, closeBtn);
 
-    const desc = el('p', 'card-sub', 'Chọn gian để xem chi tiết. Dùng nút Teleport trong chi tiết để di chuyển tới gian.');
+    const desc = el('p', 'card-sub', 'Chọn gian bạn đang đứng để đánh dấu vị trí hiện tại và chỉ đường từ đây tới gian đích.');
 
     const presetsDiv = el('div', 'loc-presets');
+    const setOriginLabel = (label: string) => {
+      this.currentOriginLabel = label;
+      const origin = this.card.querySelector('.card-nav-origin b');
+      if (origin) origin.textContent = label;
+      const bottomOrigin = this.navBottomPanel.querySelector('.nav-origin-text b');
+      if (bottomOrigin) bottomOrigin.textContent = label;
+      modal.hidden = true;
+      this.showToast(`Đã đánh dấu vị trí hiện tại: ${label}`);
+    };
+    const addPreset = (label: string, x: number, y: number) => {
+      const button = el('button', undefined, label);
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        if (this.cb.onSetOriginPoint(x, y)) setOriginLabel(label);
+      });
+      presetsDiv.append(button);
+    };
+    const checkin = this.map.zones.find(zone => /check[\s-]*in/i.test(zone.label))?.rect
+      ?? this.map.halls.find(hall => !hall.sealed && /check[\s-]*in/i.test(hall.label || ''));
+    addPreset('Check-in', checkin ? checkin.x + checkin.w / 2 : SPAWN.x,
+      checkin ? checkin.y + checkin.h / 2 : SPAWN.y);
+    for (const hall of this.map.halls) {
+      if (hall.sealed) continue;
+      addPreset(hall.label?.split(' · ')[0] || 'Hall', hall.x + hall.w / 2, hall.y + hall.h / 2);
+    }
     // Search booth input
     const searchInput = el('input', 'loc-search');
     searchInput.type = 'search';
@@ -992,8 +1043,8 @@ export class Hud {
         chip.style.background = s.color;
         li.append(chip, el('span', 'name', s.name || s.code));
         li.addEventListener('click', () => {
-          modal.hidden = true;
-          this.cb.onSelectStand(s);
+          this.cb.onSetCurrentLocation(s);
+          setOriginLabel(s.code || s.name);
         });
         resultsList.append(li);
       }
@@ -1011,7 +1062,7 @@ export class Hud {
     const hint = el('p', 'loc-hint');
     hint.append(
       makeIcon(Sparkles, 14),
-      document.createTextNode(' Chọn gian rồi bấm Teleport trong chi tiết.')
+      document.createTextNode(' Điểm đến được giữ nguyên khi chọn lại vị trí hiện tại.')
     );
 
     card.append(header, desc, presetsDiv, searchInput, resultsList, hint);
@@ -1031,7 +1082,7 @@ export class Hud {
       titleEl.innerHTML = '';
       titleEl.append(
         makeIcon(MapPin, 18),
-        document.createTextNode(context === 'set-origin' ? ' Tìm gian để teleport' : ' Tìm gian để teleport')
+        document.createTextNode(context === 'set-origin' ? ' Chọn vị trí xuất phát' : ' Chọn vị trí hiện tại')
       );
     }
     const input = this.locationModal.querySelector<HTMLInputElement>('.loc-search');
@@ -1044,31 +1095,47 @@ export class Hud {
     }
   }
 
-  /**
-   * Chế độ xoay màn hình (orientation toggle cho mobile và desktop)
-   */
-  async toggleOrientation() {
-    const isLandscape = window.innerWidth > window.innerHeight;
-    const targetOrientation = isLandscape ? 'portrait' : 'landscape';
+  private updateFullscreenButton() {
+    const expanded = Boolean(document.fullscreenElement);
+    this.fullscreenBtn.replaceChildren(
+      makeIcon(expanded ? Minimize : Maximize, 14),
+      el('span', 'button-label', expanded ? 'Thu nhỏ' : 'Toàn màn hình'),
+    );
+    this.fullscreenBtn.title = expanded ? 'Thoát toàn màn hình' : 'Mở toàn màn hình ngang';
+    this.fullscreenBtn.setAttribute('aria-label', this.fullscreenBtn.title);
+  }
 
-    const screenOri = screen.orientation as unknown as { lock?: (type: string) => Promise<void> } | undefined;
-    if (screenOri && typeof screenOri.lock === 'function') {
-      try {
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
+  /** Enter fullscreen first, then request landscape while the user gesture is active. */
+  private async toggleFullscreen() {
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (value: string) => Promise<void>; unlock?: () => void };
+    try {
+      if (document.fullscreenElement) {
+        orientation.unlock?.();
+        await document.exitFullscreen();
+        this.showToast('Đã thu nhỏ màn hình.');
+      } else {
+        if (!document.documentElement.requestFullscreen) {
+          throw new Error('fullscreen unsupported');
         }
-        await screenOri.lock(targetOrientation);
-        this.showToast(isLandscape ? 'Đã chuyển xoay dọc màn hình' : 'Đã chuyển xoay ngang màn hình');
-      } catch {
-        this.showToast(isLandscape ? 'Vui lòng xoay dọc thiết bị' : 'Vui lòng xoay ngang thiết bị');
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        if (typeof orientation.lock === 'function') {
+          try {
+            await orientation.lock('landscape');
+            this.showToast('Đã mở toàn màn hình ngang.');
+          } catch {
+            this.showToast('Đã mở toàn màn hình. Hãy xoay điện thoại ngang để xem rộng hơn.');
+          }
+        } else {
+          this.showToast('Đã mở toàn màn hình. Hãy xoay điện thoại ngang để xem rộng hơn.');
+        }
       }
-    } else {
-      this.showToast(isLandscape ? 'Vui lòng xoay dọc thiết bị' : 'Vui lòng xoay ngang thiết bị');
+    } catch {
+      this.showToast('Thiết bị không hỗ trợ nút toàn màn hình. Hãy xoay điện thoại thủ công.');
+    } finally {
+      this.updateFullscreenButton();
+      window.dispatchEvent(new Event('resize'));
+      window.setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
     }
-
-    // Kích hoạt cập nhật kích thước khung nhìn
-    window.dispatchEvent(new Event('resize'));
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
   }
 
   private buildJoystick() {

@@ -24,6 +24,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Minimize,
   type IconNode,
 } from 'lucide';
 
@@ -32,6 +33,7 @@ export {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Minimize,
   Search,
   Download,
   Compass,

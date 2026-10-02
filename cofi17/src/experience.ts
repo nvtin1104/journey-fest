@@ -1,4 +1,6 @@
 import { openSampleViewer } from './booth/C17-C18/viewer';
+import { buildA9Booth, A9_STAND_ID } from './booth/A9/component';
+import { boothConfig as boothConfigA9 } from './booth/A9/config';
 /**
  * Everything that only matters once the visitor presses "Start": detailed stands and signs,
  * the character, controls and the HUD. Loaded as a separate chunk so the start screen appears fast.
@@ -75,6 +77,9 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const featuredStand = map.stands.find((stand) => stand.id === FEATURED_STAND_ID);
   const boothSample = featuredStand ? buildBoothSample(featuredStand) : null;
   if (boothSample) detail.add(boothSample.group);
+  const a9Stand = map.stands.find((stand) => stand.id === A9_STAND_ID);
+  const a9Booth = a9Stand ? buildA9Booth(a9Stand) : null;
+  if (a9Booth) detail.add(a9Booth.group);
   let focusedVendorId: string | null = null;
 
   o.onProgress(0.5, 'Đang dựng khu vực…');
@@ -226,7 +231,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   };
 
   /** Fast travel directly to a booth */
-  const teleportToStand = (s: Stand) => {
+  const teleportToStand = (s: Stand, settingLocation = false) => {
     walkingRoute = [];
     player.stopWalking();
     follow.stopInspect();
@@ -236,13 +241,13 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     follow.skipIntro();
     follow.snapBehind(p.cameraYaw);
     focusedVendorId = null;
-    if (activeDestination === s) {
+    if (activeDestination === s && !settingLocation) {
       cancelNavigation();
       hud.showToast(`Đã đến gian hàng ${s.code || s.name}`);
     } else if (activeDestination) {
       updateRoute(true);
     }
-    history.replaceState(null, '', `#${encodeURIComponent(s.code.split('–')[0] || s.name)}`);
+    if (!settingLocation) history.replaceState(null, '', `#${encodeURIComponent(s.code.split('–')[0] || s.name)}`);
   };
 
   const toggleCameraTarget = () => {
@@ -272,13 +277,11 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
 
   let gender = o.gender;
   const selectCharacter = (g: Gender) => {
+    savePref('gender', g);
     if (g === gender) return;
     gender = g;
     player.setAvatar(createAvatar(gender));
     hud.setGender(gender);
-    hud.setQuality(o.quality.mode, o.quality.level);
-    o.quality.onChange = (mode, level) => hud.setQuality(mode, level);
-    savePref('gender', gender);
   };
   const switchCharacter = () => selectCharacter(gender === 'male' ? 'female' : 'male');
 
@@ -327,6 +330,26 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     onCancelNavigation: cancelNavigation,
     onBeginWalking: beginWalking,
     onTeleportToStand: teleportToStand,
+    onSetCurrentLocation: (s) => teleportToStand(s, true),
+    onSetOriginPoint: (mapX, mapY) => {
+      const grid = pathfinder.toGrid(toWorldX(mapX), toWorldZ(mapY));
+      const cell = pathfinder.nearestWalkable(grid.gx, grid.gz);
+      if (!cell) {
+        hud.showToast('Không tìm được vị trí xuất phát tại khu vực này');
+        return false;
+      }
+      const point = pathfinder.toWorld(cell.gx, cell.gz);
+      walkingRoute = [];
+      player.stopWalking();
+      follow.stopInspect();
+      player.teleport(point.x, point.z, player.heading);
+      leaveOverview();
+      follow.skipIntro();
+      follow.snapBehind(player.heading + Math.PI);
+      focusedVendorId = null;
+      if (activeDestination) updateRoute(true);
+      return true;
+    },
     onToggleCameraTarget: toggleCameraTarget,
   });
 
@@ -346,10 +369,26 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     raycaster.setFromCamera(ndc, camera);
     // Pick the nearest rendered surface, rather than projecting through the booth onto the floor.
     const surfaceHit = raycaster.intersectObject(detail, true).find(hit => hit.object instanceof THREE.Mesh);
-    if (boothSample) {
-      const sampleHit = raycaster.intersectObjects(boothSample.targets, false)[0];
+    const sampleTargets = [...(boothSample?.targets ?? []), ...(a9Booth?.targets ?? [])];
+    if (sampleTargets.length) {
+      const sampleHit = raycaster.intersectObjects(sampleTargets, false)[0];
       if (sampleHit && (!surfaceHit || sampleHit.distance <= surfaceHit.distance + 0.02)) {
-        openSampleViewer(String(sampleHit.object.userData.sampleUrl));
+        openSampleViewer({
+          url: String(sampleHit.object.userData.sampleUrl),
+          boothLabel: sampleHit.object.userData.sampleIndex !== undefined
+            ? boothConfigA9.code
+            : String(sampleHit.object.userData.sampleLabel ?? 'C17–C18'),
+          boothName: String(sampleHit.object.userData.sampleBoothName ?? 'Bốt Củ Chuối Xả kho đi Úc'),
+          fileName: String(sampleHit.object.userData.sampleFileName ?? 'C17-C18-sample.webp'),
+          samples: sampleHit.object.userData.sampleIndex !== undefined
+            ? boothConfigA9.samples.map((sample, index) => ({
+                url: sample.full,
+                title: sample.title,
+                fileName: `A9-${index + 1}.webp`,
+              }))
+            : undefined,
+          initialIndex: Number(sampleHit.object.userData.sampleIndex ?? 0),
+        });
         return;
       }
     }
@@ -499,7 +538,7 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
         hud.setNavigation({ destination: activeDestination, distance: dist, isInspecting: follow.isInspecting() });
 
         if (dist < 2.0) {
-          hud.showToast(`🎉 Bạn đã đến gian hàng ${activeDestination.code || activeDestination.name}!`);
+          hud.showToast(`Bạn đã đến gian hàng ${activeDestination.code || activeDestination.name}!`);
           cancelNavigation();
         } else if (t - lastRouteCalcTime > 0.8) {
           lastRouteCalcTime = t;

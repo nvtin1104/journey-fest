@@ -1,16 +1,29 @@
 import { boothConfig } from './config';
 
-export function openSampleViewer(url = boothConfig.assets.sample) {
+export interface SampleViewerOptions {
+  url?: string;
+  boothLabel?: string;
+  boothName?: string;
+  fileName?: string;
+  samples?: readonly { url: string; title?: string; fileName?: string }[];
+  initialIndex?: number;
+}
+
+export function openSampleViewer(options: SampleViewerOptions = {}) {
+  const boothLabel = options.boothLabel ?? boothConfig.code;
+  const boothName = options.boothName ?? boothConfig.name;
+  const samples = options.samples?.length
+    ? options.samples
+    : [{ url: options.url ?? boothConfig.assets.sample, fileName: options.fileName }];
+  let sampleIndex = ((options.initialIndex ?? 0) % samples.length + samples.length) % samples.length;
   const dialog = document.createElement('dialog');
   dialog.className = 'poster-modal';
-  dialog.setAttribute('aria-label', 'Ảnh mẫu C17–C18');
+  dialog.setAttribute('aria-label', `Ảnh mẫu ${boothLabel}`);
   const header = document.createElement('div');
   header.className = 'poster-header';
   const title = document.createElement('strong');
-  title.textContent = 'Ảnh mẫu · C17–C18';
+  title.textContent = `Ảnh mẫu · ${boothLabel}`;
   const download = document.createElement('a');
-  download.href = url;
-  download.download = 'C17-C18-sample.webp';
   download.textContent = 'Tải ảnh';
   download.className = 'sample-download';
   const close = document.createElement('button');
@@ -21,8 +34,7 @@ export function openSampleViewer(url = boothConfig.assets.sample) {
   const stage = document.createElement('div');
   stage.className = 'poster-stage';
   const image = document.createElement('img');
-  image.src = url;
-  image.alt = `Ảnh mẫu · ${boothConfig.name}`;
+  image.alt = `Ảnh mẫu · ${boothName}`;
   image.draggable = false;
   const bar = document.createElement('div');
   bar.className = 'poster-zoom';
@@ -49,6 +61,35 @@ export function openSampleViewer(url = boothConfig.assets.sample) {
     button.onclick = action;
     bar.append(button);
   }
+  const previous = document.createElement('button');
+  previous.type = 'button';
+  previous.className = 'poster-nav prev';
+  previous.textContent = '‹';
+  previous.setAttribute('aria-label', 'Sample trước');
+  previous.hidden = samples.length < 2;
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'poster-nav next';
+  next.textContent = '›';
+  next.setAttribute('aria-label', 'Sample tiếp theo');
+  next.hidden = samples.length < 2;
+  const showSample = (index: number) => {
+    sampleIndex = (index + samples.length) % samples.length;
+    const sample = samples[sampleIndex];
+    image.src = sample.url;
+    image.alt = `Ảnh mẫu ${sample.title ?? ''} · ${boothName}`;
+    download.href = sample.url;
+    download.download = sample.fileName ?? options.fileName ?? 'C17-C18-sample.webp';
+    title.textContent = samples.length > 1
+      ? `Ảnh mẫu · ${boothLabel} · ${sampleIndex + 1}/${samples.length}`
+      : `Ảnh mẫu · ${boothLabel}`;
+    x = y = 0;
+    zoom = 1;
+    apply();
+  };
+  previous.addEventListener('click', () => showSample(sampleIndex - 1));
+  next.addEventListener('click', () => showSample(sampleIndex + 1));
+  image.onload = apply;
   stage.addEventListener('wheel', event => { event.preventDefault(); setZoom(zoom * Math.exp(-event.deltaY * 0.002)); }, { passive: false });
   image.addEventListener('dblclick', () => setZoom(zoom === 1 ? 2 : 1));
   const pointers = new Map<number, { x: number; y: number }>();
@@ -72,11 +113,11 @@ export function openSampleViewer(url = boothConfig.assets.sample) {
   stage.addEventListener('pointerup', release);
   stage.addEventListener('pointercancel', release);
   stage.addEventListener('lostpointercapture', release);
-  image.onload = apply;
-  stage.append(image, bar);
+  stage.append(image, previous, next, bar);
   dialog.append(header, stage);
   document.body.append(dialog);
   dialog.addEventListener('close', () => dialog.remove(), { once: true });
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
   dialog.showModal();
+  showSample(sampleIndex);
 }

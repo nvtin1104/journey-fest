@@ -24,30 +24,31 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
 
   const savedGender = loadPref('gender');
   const hasSavedGender = savedGender === 'male' || savedGender === 'female';
+  if (hasSavedGender) {
+    for (const pick of picks) pick.hidden = true;
+    if (instruction) instruction.textContent = 'Đang mở bản đồ với nhân vật đã lưu…';
+  }
   let gender: Gender = savedGender === 'female' ? 'female' : 'male';
-  const select = (g: Gender) => {
+  const select = (g: Gender, persist = true) => {
     gender = g;
     for (const p of picks) p.setAttribute('aria-pressed', String(p.dataset.gender === g));
-    savePref('gender', gender);
-    if (hasSavedGender && instruction) {
-      instruction.textContent = `Đang dùng nhân vật ${gender === 'female' ? 'Nữ' : 'Nam'} đã lưu. Bạn có thể đổi nếu muốn.`;
-    }
+    if (persist) savePref('gender', gender);
   };
-  select(gender);
+  select(gender, false);
   for (const p of picks) p.addEventListener('click', () => select(p.dataset.gender as Gender));
 
   let started = false;
-  const start = () => {
+  const start = (requestOrientation = true) => {
     if (started || button.disabled) return;
     started = true;
-    prepareMobileLandscape();
+    if (requestOrientation) prepareMobileLandscape();
     savePref('gender', gender);
     panel.classList.add('loading');
     for (const p of picks) p.disabled = true;
     button.disabled = true;
     onStart(gender);
   };
-  button.addEventListener('click', start);
+  button.addEventListener('click', () => start());
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !panel.classList.contains('hide')) start();
   });
@@ -59,9 +60,8 @@ export function setupStartScreen(onStart: (gender: Gender) => void): StartScreen
       panel.classList.add('ready');
       // Returning visitors keep their saved character and resume directly after the map is ready.
       // New visitors still choose a character and explicitly start the tour.
-      // Mobile fullscreen/orientation lock needs an explicit user gesture.
-      const touchDevice = navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
-      if (hasSavedGender && !touchDevice) start();
+      // Resume on every device; fullscreen remains available through the HUD button.
+      if (hasSavedGender) start(false);
     },
     progress: (fraction, label) => {
       bar.style.width = `${Math.round(fraction * 100)}%`;
