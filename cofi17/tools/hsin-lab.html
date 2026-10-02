@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hsin · Model lab</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0a0e; color: #f5ead8; font: 14px system-ui, sans-serif; }
+      #bar { position: fixed; top: 12px; left: 12px; display: flex; gap: 8px; align-items: center; z-index: 1; }
+      button { border: 1px solid #e8c06a; background: #2a0e16; color: #ffe9b8; border-radius: 999px; padding: 8px 14px; font-weight: 700; cursor: pointer; }
+      #status { opacity: 0.8; }
+    </style>
+  </head>
+  <body>
+    <!-- Dev-only page (pnpm dev → http://localhost:4317/tools/hsin-lab.html): builds Hsin in code and exports the GLB. -->
+    <div id="bar"><button id="export" type="button">Tải hsin.glb</button><span id="status"></span></div>
+    <script type="module" src="/src/npc/hsin/lab.ts"></script>
+  </body>
+</html>

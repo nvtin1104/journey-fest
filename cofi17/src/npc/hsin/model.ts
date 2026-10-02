@@ -8,6 +8,18 @@ import { createHsinMaterials, type HsinMaterials } from './materials';
  */
 
 const HIPS_Y = 0.99;
+
+/** Held photo pose (Euler XYZ, radians), after the reference art: right hand on the chest, left hand raised beside the head. */
+const PHOTO = {
+  rightShoulder: [-0.55, 0.15, -0.12],
+  rightElbow: [-2.0, 0, 0.75],
+  leftShoulder: [-0.25, -0.2, 2.55],
+  leftElbow: [-0.2, 0, 1.35],
+};
+
+const qRoot = new THREE.Quaternion();
+const qElbow = new THREE.Quaternion();
+const qHang = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 
 export type HsinPose = 'idle' | 'wave' | 'photo';
@@ -109,7 +121,7 @@ function buildHair(head: THREE.Group, spine: THREE.Group, mats: HsinMaterials, d
       const phi = sx * (1.05 + k * 0.2);
       const root = headPoint(0.3 * Math.PI, phi, 1.03);
       const a = headPoint(0.55 * Math.PI, phi, 1.12);
-      const len = 0.24 + k * 0.05;
+      const len = 0.3 + k * 0.24;
       const wave = 0.012 * (k % 2 ? 1 : -1);
       geos.push(strand(curveOf(
         [root.x, root.y, root.z], [a.x, a.y, a.z],
@@ -180,7 +192,7 @@ function buildHair(head: THREE.Group, spine: THREE.Group, mats: HsinMaterials, d
 /** Fox ears with grey-black tips, a pale inner ear and white tufts. */
 function buildEars(head: THREE.Group, mats: HsinMaterials) {
   for (const sx of [-1, 1]) {
-    const ear = group('ear', 0, 0, 0);
+    const ear = group(sx > 0 ? 'ear-l' : 'ear-r');
     const base = headPoint(0.22 * Math.PI, sx * 0.85, 0.98);
     ear.position.copy(base);
     ear.rotation.set(-0.12, 0, -sx * 0.32);
@@ -214,6 +226,24 @@ function buildEars(head: THREE.Group, mats: HsinMaterials) {
       }));
     }
     ear.add(mesh(merge([outer, inner, ...tufts]), mats.ears));
+    const ring = prepare(new THREE.TorusGeometry(0.03, 0.0032, 6, 24));
+    ring.rotateX(Math.PI / 2);
+    ring.scale(1, 1, 0.5);
+    ring.translate(0, 0.05, 0);
+    ear.add(mesh(ring, mats.gold));
+    // White pompom at the base of the ear.
+    const pomRand = rng(70 + sx);
+    const pom: THREE.BufferGeometry[] = [prepare(new THREE.SphereGeometry(0.022, 14, 10))];
+    for (let k = 0; k < 26; k++) {
+      const d = new THREE.Vector3(pomRand() - 0.5, pomRand() - 0.5, pomRand() - 0.5).normalize();
+      const tip = d.clone().multiplyScalar(0.034 + pomRand() * 0.01);
+      pom.push(strand(curveOf([d.x * 0.015, d.y * 0.015, d.z * 0.015], [tip.x * 0.7, tip.y * 0.7, tip.z * 0.7], [tip.x, tip.y, tip.z]), {
+        radius: (t) => 0.007 * (1 - t) + 0.0008, outward: () => d, segments: 4, radial: 4,
+      }));
+    }
+    const pomGeo = merge(pom);
+    pomGeo.translate(sx * 0.02, 0.005, 0.03);
+    ear.add(mesh(pomGeo, mats.fur));
     head.add(ear);
   }
 }
@@ -246,16 +276,38 @@ function buildArm(spine: THREE.Group, side: 1 | -1, mats: HsinMaterials, detail:
   // Off-shoulder sleeve with a fur band at the top.
   shoulder.add(mesh(lathe([[0.066, -0.29], [0.062, -0.2], [0.058, -0.12], [0.054, -0.07]], { segments: 28 }), mats.sleeve));
   shoulder.add(mesh(merge(furRing({ y: -0.07, radius: 0.05, count: Math.round(110 * detail), length: [0.04, 0.075], droop: 0.45, seed: 11 + side, thickness: 0.016 })), mats.fur));
+  // Dark feathered pauldron over the top of the shoulder.
+  const feathers: THREE.BufferGeometry[] = [];
+  const featherRand = rng(31 + side);
+  for (let k = 0; k < 11; k++) {
+    const a = side * (0.25 + (k / 10) * 2.6);
+    const dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+    const root = dir.clone().multiplyScalar(0.04).setY(0.01 - featherRand() * 0.02);
+    const mid = root.clone().addScaledVector(dir, 0.05).setY(root.y + 0.012);
+    const tip = root.clone().addScaledVector(dir, 0.1 + featherRand() * 0.03).setY(root.y - 0.05);
+    feathers.push(strand(curveOf([root.x, root.y, root.z], [mid.x, mid.y, mid.z], [tip.x, tip.y, tip.z]), {
+      radius: (t) => 0.022 * Math.sin(Math.min(1, 0.25 + t) * Math.PI * 0.5) * (1 - t) ** 0.8 + 0.001, flat: 0.18, outward: () => UP,
+      color: (t) => new THREE.Color('#6d7282').lerp(new THREE.Color('#15151b'), t), segments: 8, radial: 6,
+    }));
+  }
+  shoulder.add(mesh(merge(feathers), mats.fur));
 
-  const elbow = group('elbow', 0, -0.29, 0);
+  const elbow = group(side > 0 ? 'elbow-l' : 'elbow-r', 0, -0.29, 0);
   elbow.rotation.x = -0.18;
   shoulder.add(elbow);
   elbow.add(mesh(lathe([[0.031, 0.012], [0.032, -0.05], [0.027, -0.17], [0.021, -0.24], [0.02, -0.25]]), mats.skin));
   // Wide bell sleeve, cuff at the bottom (points listed hem first so the gold band lands on the hem).
-  elbow.add(mesh(lathe([[0.125, -0.27], [0.1, -0.18], [0.076, -0.07], [0.064, 0.02]], { segments: 36 }), mats.sleeve));
-  elbow.add(mesh(merge(furRing({ y: -0.265, radius: 0.118, count: Math.round(120 * detail), length: [0.06, 0.13], droop: 0.8, seed: 21 + side, thickness: 0.017 })), mats.fur));
+  // Long open sleeve hanging below the hand: red silk outside, pale blue lining, open on the inner side.
+  const sleeveAngle = (u: number) => -side * Math.PI / 2 + 0.45 + u * (Math.PI * 2 - 0.9);
+  const sleeveRadius = (_u: number, v: number) => 0.066 + 0.11 * v ** 1.2;
+  // The sleeve hangs from the elbow on its own pivot; update() turns it so it falls with gravity.
+  const drape = group(side > 0 ? 'sleeve-l' : 'sleeve-r');
+  elbow.add(drape);
+  drape.add(mesh(clothPanel({ angle: sleeveAngle, radius: sleeveRadius, top: 0.02, length: 0.44, cols: 28, rows: 14, sway: () => 0 }), mats.sleeve));
+  drape.add(mesh(clothPanel({ angle: sleeveAngle, radius: (u, v) => sleeveRadius(u, v) - 0.005, top: 0.015, length: 0.43, cols: 28, rows: 14, sway: () => 0 }), mats.lining, false));
+  drape.add(mesh(merge(furRing({ y: -0.415, radius: 0.165, count: Math.round(130 * detail), length: [0.07, 0.16], droop: 0.9, seed: 21 + side, thickness: 0.016 })), mats.fur));
 
-  const wrist = group('wrist', 0, -0.25, 0);
+  const wrist = group(side > 0 ? 'wrist-l' : 'wrist-r', 0, -0.25, 0);
   elbow.add(wrist);
   const palm = prepare(new THREE.SphereGeometry(0.04, 18, 14));
   palm.scale(0.36, 1.1, 0.78);
@@ -274,19 +326,19 @@ function buildArm(spine: THREE.Group, side: 1 | -1, mats: HsinMaterials, detail:
   const bracelet = prepare(new THREE.TorusGeometry(0.024, 0.003, 6, 20));
   bracelet.rotateX(Math.PI / 2);
   wrist.add(mesh(merge(fingers), mats.skin), mesh(bracelet, mats.gold));
-  return { shoulder, elbow, wrist };
+  return { shoulder, elbow, wrist, drape };
 }
 
 function buildLeg(hips: THREE.Group, side: 1 | -1, mats: HsinMaterials) {
   const hip = group(side > 0 ? 'hip-l' : 'hip-r', side * 0.085, -0.05, 0);
   hips.add(hip);
   hip.add(mesh(lathe([[0.074, 0.03], [0.077, -0.06], [0.066, -0.2], [0.052, -0.36], [0.044, -0.43]]), mats.skin));
-  const knee = group('knee', 0, -0.43, 0);
+  const knee = group(side > 0 ? 'knee-l' : 'knee-r', 0, -0.43, 0);
   hip.add(knee);
   knee.add(mesh(lathe([[0.044, 0.012], [0.047, -0.06], [0.046, -0.13], [0.034, -0.28], [0.024, -0.38], [0.023, -0.41]]), mats.skin));
-  const ankle = group('ankle', 0, -0.41, 0);
+  const ankle = group(side > 0 ? 'ankle-l' : 'ankle-r', 0, -0.41, 0);
   knee.add(ankle);
-  const foot = group('foot');
+  const foot = group(side > 0 ? 'foot-l' : 'foot-r');
   foot.rotation.x = 0.55;
   ankle.add(foot);
   foot.add(mesh(strand(curveOf([0, -0.005, -0.035], [0, -0.012, 0.04], [0, -0.012, 0.13]), {
@@ -334,29 +386,32 @@ function buildOutfit(hips: THREE.Group, spine: THREE.Group, mats: HsinMaterials)
   sash.translate(0, 0.13, 0);
   const bows: THREE.BufferGeometry[] = [sash];
   for (const sx of [-1, 1]) {
-    const loop = prepare(new THREE.SphereGeometry(0.022, 14, 10));
-    loop.scale(1.6, 0.9, 0.5);
+    const loop = prepare(new THREE.SphereGeometry(0.024, 14, 10));
+    loop.scale(1.6, 0.85, 0.5);
     loop.rotateZ(sx * 0.4);
-    loop.translate(sx * 0.03, 0.15, 0.1);
+    loop.translate(sx * 0.034, 0.3, 0.122);
     bows.push(loop);
-    bows.push(strand(curveOf([sx * 0.008, 0.14, 0.1], [sx * 0.025, 0.06, 0.112], [sx * 0.03, -0.04, 0.12]), {
-      radius: () => 0.009, flat: 0.25, outward: () => new THREE.Vector3(0, 0, 1), segments: 8, radial: 6,
+    bows.push(strand(curveOf([sx * 0.008, 0.29, 0.125], [sx * 0.03, 0.2, 0.128], [sx * 0.036, 0.08, 0.13]), {
+      radius: () => 0.01, flat: 0.25, outward: () => new THREE.Vector3(0, 0, 1), segments: 10, radial: 6,
     }));
   }
   spine.add(mesh(merge(bows), mats.sleeve));
   const gold: THREE.BufferGeometry[] = [];
-  gold.push(placed(starGeometry(0.026), new THREE.Vector3(0, 0.145, 0.112), new THREE.Vector3(0, 0, 1)));
-  const cord = prepare(new THREE.CylinderGeometry(0.0025, 0.0025, 0.2, 6));
-  cord.translate(0, 0.03, 0.118);
+  const frame = prepare(new THREE.TorusGeometry(0.024, 0.004, 8, 28));
+  frame.scale(0.8, 1.15, 1);
+  frame.translate(0, 0.262, 0.128);
+  gold.push(frame, placed(starGeometry(0.04), new THREE.Vector3(0, 0.262, 0.122), new THREE.Vector3(0, 0, 1)));
+  const cord = prepare(new THREE.CylinderGeometry(0.0025, 0.0025, 0.3, 6));
+  cord.translate(0, 0.08, 0.124);
   gold.push(cord);
-  const tassel = prepare(new THREE.ConeGeometry(0.012, 0.06, 10));
+  const tassel = prepare(new THREE.ConeGeometry(0.012, 0.07, 10));
   tassel.rotateX(Math.PI);
-  tassel.translate(0, -0.1, 0.12);
+  tassel.translate(0, -0.1, 0.126);
   gold.push(tassel);
   spine.add(mesh(merge(gold), mats.gold));
-  const gem = prepare(new THREE.OctahedronGeometry(0.009));
-  gem.scale(1, 1.5, 0.6);
-  gem.translate(0, 0.145, 0.122);
+  const gem = prepare(new THREE.SphereGeometry(0.02, 20, 14));
+  gem.scale(0.8, 1.15, 0.55);
+  gem.translate(0, 0.262, 0.132);
   spine.add(mesh(gem, mats.gem));
 
   // Choker with a gold pendant and a red drop.
@@ -368,7 +423,7 @@ function buildOutfit(hips: THREE.Group, spine: THREE.Group, mats: HsinMaterials)
   const drop = prepare(new THREE.OctahedronGeometry(0.006));
   drop.scale(1, 1.6, 0.7);
   drop.translate(0, 0.56, 0.047);
-  spine.add(mesh(drop, mats.gem));
+  spine.add(mesh(drop, mats.ruby));
 
   // Pale blue chiffon underskirt, open at the front for the high slits.
   hips.add(mesh(clothPanel({
@@ -377,7 +432,7 @@ function buildOutfit(hips: THREE.Group, spine: THREE.Group, mats: HsinMaterials)
   }), mats.chiffon, false));
   // Black front panel, slightly away from the legs so a stride does not cut through it.
   hips.add(mesh(clothPanel({
-    angle: (u, v) => (u - 0.5) * (0.66 - v * 0.1), radius: (_u, v) => 0.165 + 0.06 * v,
+    angle: (u, v) => (u - 0.5) * (0.86 - v * 0.14), radius: (_u, v) => 0.165 + 0.06 * v,
     top: 0.05, length: 0.94, scaleX: 1.05, scaleZ: 0.85, cols: 8, rows: 20,
   }), mats.frontPanel));
 
@@ -392,11 +447,7 @@ function buildOutfit(hips: THREE.Group, spine: THREE.Group, mats: HsinMaterials)
       angle: robeAngle(sx), radius: robeRadius, top: robeTop, length: robeLength, scaleX: 1.08, scaleZ: 0.9, cols: 28, rows: 34,
       sway: (_u, v) => Math.pow(v, 1.3),
     });
-    if (sx < 0) {
-      // Mirror the UVs so the gold border pattern reads the same on both sides.
-      const uv = panel.getAttribute('uv');
-      for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
-    }
+    // u = 0 is the front edge on both sides, so the red hem stays in front and the fox motif behind.
     hips.add(mesh(panel, mats.robe));
     // Gold tassels on the front edges at mid-thigh.
     const v = 0.45;
@@ -417,8 +468,8 @@ function buildOutfit(hips: THREE.Group, spine: THREE.Group, mats: HsinMaterials)
 }
 
 function buildTail(hips: THREE.Group, mats: HsinMaterials, detail: number) {
-  const spine = curveOf([0, -0.02, -0.12], [0.04, -0.2, -0.3], [0.14, -0.45, -0.55], [0.32, -0.62, -0.82], [0.55, -0.6, -1.0], [0.72, -0.42, -1.08]);
-  const radiusAt = (s: number) => 0.05 + 0.2 * Math.pow(Math.sin(Math.PI * Math.min(1, s * 1.08)), 0.8);
+  const spine = curveOf([0, -0.02, -0.12], [0.05, -0.22, -0.33], [0.16, -0.5, -0.6], [0.36, -0.68, -0.9], [0.62, -0.66, -1.1], [0.82, -0.46, -1.2]);
+  const radiusAt = (s: number) => 0.055 + 0.23 * Math.pow(Math.sin(Math.PI * Math.min(1, s * 1.08)), 0.8);
   const frameAt = (s: number) => {
     const t = spine.getTangentAt(s).normalize();
     const side = new THREE.Vector3().crossVectors(t, UP).normalize();
@@ -508,7 +559,7 @@ function buildOrnaments(head: THREE.Group, mats: HsinMaterials) {
 }
 
 export function buildHsinModel(renderer: THREE.WebGLRenderer, detail = 1): HsinModel {
-  const mats = createHsinMaterials(renderer);
+  const mats = createHsinMaterials(renderer, detail);
   const root = new THREE.Group();
   root.name = 'npc-hsin';
   const hips = group('hips', 0, HIPS_Y, 0);
@@ -539,7 +590,7 @@ export function buildHsinModel(renderer: THREE.WebGLRenderer, detail = 1): HsinM
   const armR = buildArm(spine, -1, mats, detail);
   const legL = buildLeg(hips, 1, mats);
   const legR = buildLeg(hips, -1, mats);
-  const ears = head.children.filter((c) => c.name === 'ear');
+  const ears = head.children.filter((c) => c.name.startsWith('ear-'));
 
   // Animation state.
   let phase = 0;
@@ -583,18 +634,31 @@ export function buildHsinModel(renderer: THREE.WebGLRenderer, detail = 1): HsinM
     const w = blend.wave;
     const mix = (rest: number, wave: number, photo: number) => rest + (wave - rest) * w + (photo - rest) * p;
     armL.shoulder.rotation.set(
-      mix(swing - 0.05 * (1 - amt), swing - 0.05 * (1 - amt), -0.25),
-      0,
-      mix(0.14 + Math.sin(time * 1.1) * 0.01, 0.14, 0.05),
+      mix(swing - 0.05 * (1 - amt), swing - 0.05 * (1 - amt), PHOTO.leftShoulder[0]),
+      mix(0, 0, PHOTO.leftShoulder[1]),
+      mix(0.14 + Math.sin(time * 1.1) * 0.01, 0.14, PHOTO.leftShoulder[2]),
     );
-    armL.elbow.rotation.set(mix(-0.2 - 0.15 * amt, -0.2 - 0.15 * amt, -1.3), 0, mix(0, 0, -0.6));
+    armL.elbow.rotation.set(mix(-0.2 - 0.15 * amt, -0.2 - 0.15 * amt, PHOTO.leftElbow[0]), mix(0, 0, PHOTO.leftElbow[1]), mix(0, 0, PHOTO.leftElbow[2]));
     armR.shoulder.rotation.set(
-      mix(-swing - 0.05 * (1 - amt), -0.25, -0.25),
-      mix(0, 0.2, 0),
-      mix(-0.14, -2.35 + Math.sin(time * 6.5) * 0.08, -0.05),
+      mix(-swing - 0.05 * (1 - amt), -0.25, PHOTO.rightShoulder[0]),
+      mix(0, 0.2, PHOTO.rightShoulder[1]),
+      mix(-0.14, -2.35 + Math.sin(time * 6.5) * 0.08, PHOTO.rightShoulder[2]),
     );
-    armR.elbow.rotation.set(mix(-0.2 - 0.15 * amt, -0.6 + Math.sin(time * 6.5 + 0.6) * 0.3, -1.3), 0, mix(0, 0, 0.6));
+    armR.elbow.rotation.set(
+      mix(-0.2 - 0.15 * amt, -0.6 + Math.sin(time * 6.5 + 0.6) * 0.3, PHOTO.rightElbow[0]),
+      mix(0, 0, PHOTO.rightElbow[1]),
+      mix(0, 0, PHOTO.rightElbow[2]),
+    );
     armR.wrist.rotation.set(0, 0, 0.3 * w);
+
+    // Sleeves fall with gravity: mostly hanging straight down, following the arm a little.
+    hips.updateWorldMatrix(true, true);
+    root.getWorldQuaternion(qRoot);
+    for (const arm of [armL, armR]) {
+      arm.elbow.getWorldQuaternion(qElbow);
+      qHang.copy(qElbow).slerp(qRoot, 0.8);
+      arm.drape.quaternion.copy(qElbow.invert().multiply(qHang));
+    }
 
     // Head: turns towards the visitor within a natural range, tilts for the photo.
     let yaw = Math.sin(time * 0.35) * 0.12;

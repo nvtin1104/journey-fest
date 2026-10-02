@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
  * Geometry builders for Hsin's model. Every builder emits the same attribute set
@@ -110,12 +110,14 @@ export function prepare(geo: THREE.BufferGeometry, sway: number | ((p: THREE.Vec
   return geo;
 }
 
-/** Merges prepared geometries (dropping any attribute not shared by all). */
+/** Merges prepared geometries into one indexed geometry (dropping any attribute not shared by all). */
 export function merge(geos: THREE.BufferGeometry[]) {
   const keep = ['position', 'normal', 'uv', 'color', 'aSway'];
   const clean = geos.map((g) => {
     for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
-    return g.index ? g.toNonIndexed() : g;
+    g.clearGroups();
+    // Keep vertices shared: an indexed mesh is about a third of the size in the exported GLB.
+    return g.index ? g : mergeVertices(g);
   });
   const merged = mergeGeometries(clean, false)!;
   clean.forEach((g) => g.dispose());

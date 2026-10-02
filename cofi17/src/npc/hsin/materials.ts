@@ -125,6 +125,8 @@ export interface HsinMaterials {
   gold: THREE.MeshStandardMaterial;
   robeGold: THREE.MeshStandardMaterial;
   gem: THREE.MeshPhysicalMaterial;
+  ruby: THREE.MeshPhysicalMaterial;
+  lining: THREE.MeshPhysicalMaterial;
   sway: { tail: SwayUniforms; ponytail: SwayUniforms; robe: SwayUniforms; chiffon: SwayUniforms; front: SwayUniforms };
 }
 
@@ -137,6 +139,101 @@ function canvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2
   if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return tex;
+}
+
+type HeightFn = (x: number, y: number) => number;
+
+/** Seeded value noise in [0, 1] on an integer lattice, smoothly interpolated. */
+function valueNoise(seed: number): (x: number, y: number) => number {
+  const hash = (x: number, y: number) => {
+    let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + seed * 1442695041;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  return (x, y) => {
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    const fx = x - xi;
+    const fy = y - yi;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sy = fy * fy * (3 - 2 * fy);
+    const a = hash(xi, yi) + (hash(xi + 1, yi) - hash(xi, yi)) * sx;
+    const b = hash(xi, yi + 1) + (hash(xi + 1, yi + 1) - hash(xi, yi + 1)) * sx;
+    return a + (b - a) * sy;
+  };
+}
+
+/**
+ * Bakes a tangent-space normal map and a roughness map from one height function
+ * (0..1 over the texture, tiling). Roughness = base + variation * (height - 0.5).
+ */
+function surfaceMaps(size: number, height: HeightFn, strength: number, roughness: { base: number; variation: number }, repeat: [number, number] = [1, 1]) {
+  const hgt = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) hgt[y * size + x] = height(x / size, y / size);
+  const at = (x: number, y: number) => hgt[((y + size) % size) * size + ((x + size) % size)];
+  const normalCanvas = document.createElement('canvas');
+  const roughCanvas = document.createElement('canvas');
+  normalCanvas.width = normalCanvas.height = roughCanvas.width = roughCanvas.height = size;
+  const nctx = normalCanvas.getContext('2d')!;
+  const rctx = roughCanvas.getContext('2d')!;
+  const nimg = nctx.createImageData(size, size);
+  const rimg = rctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      const len = Math.hypot(dx, dy, 1);
+      const i = (y * size + x) * 4;
+      // Canvas rows run top-down while UV v runs bottom-up, hence the flipped green channel.
+      nimg.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 1] = ((dy / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 3] = 255;
+      const r = THREE.MathUtils.clamp(roughness.base + roughness.variation * (at(x, y) - 0.5), 0.04, 1) * 255;
+      rimg.data[i] = rimg.data[i + 1] = rimg.data[i + 2] = r;
+      rimg.data[i + 3] = 255;
+    }
+  }
+  nctx.putImageData(nimg, 0, 0);
+  rctx.putImageData(rimg, 0, 0);
+  const make = (c: HTMLCanvasElement) => {
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.NoColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(...repeat);
+    t.anisotropy = 4;
+    return t;
+  };
+  return { normalMap: make(normalCanvas), roughnessMap: make(roughCanvas), normalScale: new THREE.Vector2(1, 1) };
+}
+
+/** Silk/satin: a fine weave plus long soft folds running down the cloth. */
+function silkSurface(seed: number, folds: number) {
+  const n = valueNoise(seed);
+  return (x: number, y: number) =>
+    0.5 + 0.08 * Math.sin(x * Math.PI * 2 * 180) * Math.sin(y * Math.PI * 2 * 180)
+    + 0.32 * Math.sin(x * Math.PI * 2 * folds + n(x * 6, y * 2) * 2.5)
+    + 0.1 * (n(x * 40, y * 40) - 0.5);
+}
+
+/** Chiffon: a sheer, open weave with gentle ripples. */
+function chiffonSurface(seed: number) {
+  const n = valueNoise(seed);
+  return (x: number, y: number) =>
+    0.5 + 0.18 * Math.sin(x * Math.PI * 2 * 260) * Math.sin(y * Math.PI * 2 * 260) + 0.25 * Math.sin(x * Math.PI * 2 * 9 + n(x * 4, y * 3) * 3);
+}
+
+/** Hair and fur: fine grooves along each strand (UV v runs along the strand). */
+function strandSurface(seed: number) {
+  const n = valueNoise(seed);
+  return (x: number, y: number) => 0.5 + 0.45 * (n(x * 96, y * 3) - 0.5) + 0.2 * Math.sin(x * Math.PI * 2 * 48);
+}
+
+/** Skin: soft pores and micro-variation. */
+function skinSurface(seed: number) {
+  const n = valueNoise(seed);
+  const m = valueNoise(seed + 1);
+  return (x: number, y: number) => 0.5 + 0.35 * (n(x * 220, y * 220) - 0.5) + 0.25 * (m(x * 24, y * 24) - 0.5);
 }
 
 /** Stylised fox mask in white strokes, drawn centred on (cx, cy). */
@@ -241,9 +338,24 @@ function robeTexture() {
       ctx.ellipse(Math.random() * w, h - Math.random() * 60, 6 + Math.random() * 30, 3 + Math.random() * 10, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    foxMotif(ctx, w / 2, hem + (h - hem) * 0.45, w * 0.3);
-    crescent(ctx, w * 0.18, hem + (h - hem) * 0.82, w * 0.06, '#f2f0f6');
-    crescent(ctx, w * 0.82, hem + (h - hem) * 0.82, w * 0.06, '#f2f0f6');
+    // Front half of the hem (u < 0.45): sparkling red, like the reference's front view.
+    const glitter = ctx.createLinearGradient(0, hem, 0, h);
+    glitter.addColorStop(0, '#b3121f');
+    glitter.addColorStop(1, '#e0303e');
+    ctx.fillStyle = glitter;
+    ctx.fillRect(0, hem, w * 0.45, h - hem);
+    for (let i = 0; i < 900; i++) {
+      ctx.fillStyle = `rgba(255,${190 + Math.floor(Math.random() * 60)},${170 + Math.floor(Math.random() * 60)},${0.25 + Math.random() * 0.6})`;
+      ctx.fillRect(Math.random() * w * 0.45, hem + Math.random() * (h - hem), 1.5 + Math.random() * 2, 1.5 + Math.random() * 2);
+    }
+    const fade = ctx.createLinearGradient(w * 0.38, 0, w * 0.5, 0);
+    fade.addColorStop(0, 'rgba(14,10,16,0)');
+    fade.addColorStop(1, 'rgba(14,10,16,1)');
+    ctx.fillStyle = fade;
+    ctx.fillRect(w * 0.38, hem, w * 0.12, h - hem);
+    foxMotif(ctx, w * 0.74, hem + (h - hem) * 0.45, w * 0.22);
+    crescent(ctx, w * 0.6, hem + (h - hem) * 0.84, w * 0.05, '#f2f0f6');
+    crescent(ctx, w * 0.9, hem + (h - hem) * 0.84, w * 0.05, '#f2f0f6');
     // Gold borders down both edges and across the top of the hem band.
     ctx.fillStyle = '#e2b45c';
     ctx.fillRect(0, 0, 10, h);
@@ -427,7 +539,7 @@ function faceTexture() {
   });
 }
 
-export function createHsinMaterials(renderer: THREE.WebGLRenderer): HsinMaterials {
+export function createHsinMaterials(renderer: THREE.WebGLRenderer, detail = 1): HsinMaterials {
   const envMap = hsinEnvironment(renderer);
   const sway = {
     tail: swayUniforms(0.16, 0.08, 1.4),
@@ -441,15 +553,25 @@ export function createHsinMaterials(renderer: THREE.WebGLRenderer): HsinMaterial
   const metal = (p: THREE.MeshStandardMaterialParameters, look?: Look) =>
     cinematic(new THREE.MeshStandardMaterial({ envMap, envMapIntensity: 1.4, metalness: 1, roughness: 0.24, color: '#e9bd62', ...p }), look);
 
+  // Smaller bakes on weaker devices: they are computed on the main thread while the scene loads.
+  const big = detail >= 0.8 ? 512 : 256;
+  const small = detail >= 0.8 ? 256 : 128;
+  const silk = surfaceMaps(big, silkSurface(3, 7), 6, { base: 0.42, variation: 0.3 });
+  const satin = surfaceMaps(big, silkSurface(5, 5), 4, { base: 0.3, variation: 0.2 });
+  const sheer = surfaceMaps(small, chiffonSurface(9), 5, { base: 0.5, variation: 0.25 });
+  const hairMaps = surfaceMaps(small, strandSurface(11), 8, { base: 0.36, variation: 0.35 }, [4, 1]);
+  const furMaps = surfaceMaps(small, strandSurface(13), 10, { base: 0.75, variation: 0.3 }, [6, 1]);
+  const skinMaps = surfaceMaps(big, skinSurface(17), 2.5, { base: 0.5, variation: 0.25 }, [2, 2]);
+  skinMaps.normalScale.set(0.35, 0.35);
   const skinParams: THREE.MeshPhysicalMaterialParameters = {
-    color: '#f6dccf', roughness: 0.52, sheen: 0.35, sheenColor: new THREE.Color('#ffb2a0'), sheenRoughness: 0.6,
+    ...skinMaps, color: '#f6dccf', roughness: 1, sheen: 0.35, sheenColor: new THREE.Color('#ffb2a0'), sheenRoughness: 0.6,
   };
   const hairParams: THREE.MeshPhysicalMaterialParameters = {
-    vertexColors: true, roughness: 0.34, sheen: 1, sheenColor: new THREE.Color('#bcd2ff'), sheenRoughness: 0.35,
+    ...hairMaps, vertexColors: true, roughness: 1, sheen: 1, sheenColor: new THREE.Color('#bcd2ff'), sheenRoughness: 0.35,
     clearcoat: 0.2, clearcoatRoughness: 0.4,
   };
   const furParams: THREE.MeshPhysicalMaterialParameters = {
-    vertexColors: true, roughness: 0.75, sheen: 1, sheenColor: new THREE.Color('#ffffff'), sheenRoughness: 0.8,
+    ...furMaps, vertexColors: true, roughness: 1, sheen: 1, sheenColor: new THREE.Color('#ffffff'), sheenRoughness: 0.8,
   };
   const robeMap = robeTexture();
   return {
@@ -462,27 +584,32 @@ export function createHsinMaterials(renderer: THREE.WebGLRenderer): HsinMaterial
     tailGold: metal({}, { rim: '#fff1c4', rimStrength: 0.2, sway: sway.tail }),
     ears: physical(furParams, { rim: '#ffffff', rimStrength: 0.4 }),
     bodice: physical({
-      color: '#0d0b10', roughness: 0.32, sheen: 0.4, sheenColor: new THREE.Color('#3a3346'), clearcoat: 0.45, clearcoatRoughness: 0.3, envMapIntensity: 0.35,
+      ...satin, color: '#0d0b10', roughness: 1, sheen: 0.4, sheenColor: new THREE.Color('#3a3346'), clearcoat: 0.45, clearcoatRoughness: 0.3, envMapIntensity: 0.35,
     }, { rim: '#b9b0d0', rimStrength: 0.12 }),
     frontPanel: physical({
-      map: frontPanelTexture(), roughness: 0.34, sheen: 0.4, sheenColor: new THREE.Color('#3a3346'), clearcoat: 0.4, envMapIntensity: 0.35,
+      ...satin, map: frontPanelTexture(), roughness: 1, sheen: 0.4, sheenColor: new THREE.Color('#3a3346'), clearcoat: 0.4, envMapIntensity: 0.35,
       side: THREE.DoubleSide,
     }, { rim: '#b9b0d0', rimStrength: 0.12, sway: sway.front }),
     chiffon: physical({
-      map: chiffonTexture(), roughness: 0.55, sheen: 1, sheenColor: new THREE.Color('#ffffff'), transparent: true, opacity: 0.78,
+      ...sheer, map: chiffonTexture(), roughness: 1, sheen: 1, sheenColor: new THREE.Color('#ffffff'), transparent: true, opacity: 0.9,
       side: THREE.DoubleSide, depthWrite: false,
     }, { rim: '#ffffff', rimStrength: 0.3, sway: sway.chiffon }),
     robe: physical({
-      map: robeMap, roughness: 0.4, sheen: 0.9, sheenColor: new THREE.Color('#ff7a7a'), sheenRoughness: 0.4, clearcoat: 0.3, clearcoatRoughness: 0.35,
+      ...silk, map: robeMap, roughness: 1, sheen: 0.9, sheenColor: new THREE.Color('#ff7a7a'), sheenRoughness: 0.4, clearcoat: 0.3, clearcoatRoughness: 0.35,
       side: THREE.DoubleSide,
     }, { rim: '#ffb0b0', rimStrength: 0.2, sway: sway.robe }),
     sleeve: physical({
-      map: sleeveTexture(), roughness: 0.4, sheen: 0.9, sheenColor: new THREE.Color('#ff7a7a'), sheenRoughness: 0.4, clearcoat: 0.3,
+      ...silk, map: sleeveTexture(), roughness: 1, sheen: 0.9, sheenColor: new THREE.Color('#ff7a7a'), sheenRoughness: 0.4, clearcoat: 0.3,
       side: THREE.DoubleSide,
     }, { rim: '#ffb0b0', rimStrength: 0.2 }),
     gold: metal({}, { rim: '#fff1c4', rimStrength: 0.2 }),
     robeGold: metal({}, { rim: '#fff1c4', rimStrength: 0.2, sway: sway.robe }),
-    gem: physical({ color: '#c0122b', roughness: 0.08, clearcoat: 1, envMapIntensity: 1.2 }, { rim: '#ff8090', rimStrength: 0.3 }),
+    gem: physical({ color: '#8fd6ff', roughness: 0.05, clearcoat: 1, ior: 1.7, specularIntensity: 1, envMapIntensity: 1.6 }, { rim: '#d8f2ff', rimStrength: 0.4 }),
+    ruby: physical({ color: '#c0122b', roughness: 0.08, clearcoat: 1, envMapIntensity: 1.2 }, { rim: '#ff8090', rimStrength: 0.3 }),
+    lining: physical({
+      ...sheer, map: chiffonTexture(), roughness: 1, sheen: 1, sheenColor: new THREE.Color('#ffffff'), transparent: true, opacity: 0.94,
+      side: THREE.DoubleSide,
+    }, { rim: '#ffffff', rimStrength: 0.25 }),
     sway,
   };
 }

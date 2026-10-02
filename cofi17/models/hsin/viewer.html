@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hsin · GLB viewer</title>
+  <!--
+    Reference Three.js setup for hsin.glb: studio HDRI lighting, filmic tone mapping, soft shadows
+    and a full-body portrait camera, tuned to read like the costume reference renders.
+
+    Serve this folder over HTTP (e.g. `npx serve models/hsin`) and open viewer.html.
+    Optional query: ?hdri=<url to .hdr> uses your own HDRI instead of the built-in studio room,
+    ?glb=<url> loads another model, ?clip=walk picks the starting animation.
+  -->
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #0b0a0e; color: #f3e9d6; font: 14px system-ui, sans-serif; overflow: hidden; }
+    canvas { display: block; }
+    #ui { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    #ui button { border: 1px solid #c9a35a; background: rgba(40, 12, 20, 0.85); color: #ffe9b8; border-radius: 999px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
+    #ui button[aria-pressed="true"] { background: #c9a35a; color: #2a0a12; }
+    #msg { position: fixed; top: 12px; left: 12px; opacity: 0.75; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="msg">Đang tải…</div>
+  <div id="ui"></div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+    const params = new URLSearchParams(location.search);
+    const glbUrl = window.HSIN_GLB_URL ?? params.get('glb') ?? './hsin.glb';
+
+    // Renderer: sRGB output, Khronos PBR Neutral tone mapping (keeps the saturated reds true to the
+    // reference; AgX/ACES wash them towards pink), soft PCF shadows.
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = 0.95;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.append(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#0b0a0e');
+
+    // Image-based lighting: a studio HDRI if given, otherwise three's procedural studio room.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const hdri = params.get('hdri');
+    if (hdri) {
+      new HDRLoader().load(hdri, (tex) => {
+        scene.environment = pmrem.fromEquirectangular(tex).texture;
+        tex.dispose();
+      });
+    } else {
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    }
+    scene.environmentIntensity = 0.6;
+
+    // Three-point lighting on top of the HDRI: warm key with shadows, cool rim from behind, soft fill.
+    const key = new THREE.DirectionalLight('#fff1e0', 2.4);
+    key.position.set(2.2, 4.2, 3.2);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.bias = -0.0002;
+    key.shadow.normalBias = 0.02;
+    key.shadow.radius = 4;
+    Object.assign(key.shadow.camera, { left: -1.6, right: 1.6, top: 2.2, bottom: -0.4, near: 0.5, far: 12 });
+    scene.add(key);
+    const rim = new THREE.DirectionalLight('#bcd2ff', 2.0);
+    rim.position.set(-2.5, 3, -3.5);
+    scene.add(rim);
+    const fill = new THREE.DirectionalLight('#ffd9e0', 0.5);
+    fill.position.set(-3, 1.2, 2);
+    scene.add(fill);
+
+    // Shadow catcher floor: only the shadow and a faint reflection-like gradient are visible.
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.45 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Full-body portrait camera: ~85 mm equivalent (narrow FOV flattens perspective like the reference sheet).
+    const camera = new THREE.PerspectiveCamera(22, innerWidth / innerHeight, 0.05, 60);
+    camera.position.set(0, 1.0, 5.6);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.92, 0);
+    controls.enableDamping = true;
+    controls.minDistance = 0.6;
+    controls.maxDistance = 12;
+    controls.autoRotate = !params.has('still');
+    controls.autoRotateSpeed = 1.2;
+    controls.update();
+
+    addEventListener('resize', () => {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    // Cloth, hair and tail sway: the GLB keeps a per-vertex sway weight (_asway); bend by it in the shader.
+    const time = { value: 0 };
+    function addSway(mesh) {
+      if (!mesh.geometry.getAttribute('_asway')) return;
+      const mat = mesh.material;
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = time;
+        shader.vertexShader = `attribute float _asway;\nuniform float uTime;\n${shader.vertexShader}`.replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          float w = _asway * _asway;
+          transformed.x += sin(uTime * 1.4 + _asway * 2.4) * 0.05 * w;
+          transformed.z += cos(uTime * 1.1 + _asway * 1.9) * 0.04 * w;`,
+        );
+      };
+      mat.customProgramCacheKey = () => 'hsin-sway';
+    }
+
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const gltf = await loader.loadAsync(glbUrl);
+    const model = gltf.scene;
+    model.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+        addSway(o);
+      }
+    });
+    scene.add(model);
+    document.getElementById('msg').textContent = 'Kéo để xoay · cuộn để zoom';
+
+    // Animations: idle / walk / wave / photo.
+    const mixer = new THREE.AnimationMixer(model);
+    const actions = Object.fromEntries(gltf.animations.map((clip) => [clip.name, mixer.clipAction(clip)]));
+    let current = null;
+    const ui = document.getElementById('ui');
+    const play = (name) => {
+      const next = actions[name];
+      if (!next || next === current) return;
+      next.reset().fadeIn(0.3).play();
+      current?.fadeOut(0.3);
+      current = next;
+      for (const b of ui.children) b.setAttribute('aria-pressed', String(b.dataset.clip === name));
+    };
+    for (const name of Object.keys(actions)) {
+      const b = document.createElement('button');
+      b.dataset.clip = name;
+      b.textContent = name;
+      b.onclick = () => play(name);
+      ui.append(b);
+    }
+    play(params.get('clip') ?? 'idle');
+
+    const timer = new THREE.Timer();
+    renderer.setAnimationLoop(() => {
+      timer.update();
+      const dt = Math.min(timer.getDelta(), 0.05);
+      time.value = timer.getElapsed();
+      mixer.update(dt);
+      controls.update();
+      renderer.render(scene, camera);
+    });
+    window.__viewer = { renderer, scene, camera, controls, mixer, play };
+  </script>
+</body>
+</html>

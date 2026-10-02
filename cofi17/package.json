@@ -10,7 +10,8 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "deploy:cf": "pnpm build && npx --yes wrangler pages deploy dist --project-name journey-fest --branch main",
-    "image": "node scripts/optimize-image.mjs"
+    "image": "node scripts/optimize-image.mjs",
+    "export:hsin": "node scripts/export-hsin.mjs"
   },
   "dependencies": {
     "@fontsource/be-vietnam-pro": "^5.3.0",
