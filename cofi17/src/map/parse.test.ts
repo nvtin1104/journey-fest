@@ -19,8 +19,8 @@ describe('parseMap', () => {
   });
 
   it('turns every small gate into a door', () => {
-    expect(map.gates).toHaveLength(16);
-    expect(map.doors).toHaveLength(16);
+    expect(map.gates).toHaveLength(18);
+    expect(map.doors).toHaveLength(18);
   });
 
   it('merges double booths that share a refId', () => {

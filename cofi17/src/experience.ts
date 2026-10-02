@@ -164,20 +164,27 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
       return;
     }
     lastCalcPos = { x: player.position.x, z: player.position.z };
-    activeRoute = pathfinder.findPath(player.position.x, player.position.z, p.x, p.z);
-    navigation.setPath(activeRoute);
+    activeRoute = pathfinder.findPath(player.position.x, player.position.z, p.x, p.z, false);
+    if (activeRoute.length >= 2) {
+      navigation.setPath(activeRoute);
+    } else {
+      activeRoute = [];
+      navigation.clear();
+    }
   };
 
   let walkingRoute: Point2D[] = [];
+  let walkingStuckTime = 0;
 
   const beginWalking = () => {
     if (!activeDestination) return;
     updateRoute(true);
     if (activeRoute.length < 2) {
-      hud.showToast("Không tìm được đường đi từ vị trí này");
+      hud.showToast("Không tìm được đường đi không vướng tường tới gian này");
       return;
     }
     walkingRoute = activeRoute.slice(1).map((point) => ({ ...point }));
+    walkingStuckTime = 0;
     leaveOverview();
     follow.skipIntro();
     follow.stopInspect();
@@ -197,13 +204,21 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     hud.showToast(`Đang dẫn đường đến gian ${s.code || s.name}`);
   };
 
+  const clearUrlHash = () => {
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  };
+
   const cancelNavigation = () => {
     walkingRoute = [];
+    walkingStuckTime = 0;
     player.stopWalking();
     activeDestination = null;
     activeRoute = [];
     navigation.clear();
     hud.setNavigation(null);
+    clearUrlHash();
   };
 
   /**
@@ -298,7 +313,17 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
     },
     onGoEntrance: () => {
       leaveOverview();
-      follow.inspectStand(new THREE.Vector3(spawn.x, 1.4, spawn.z), spawn.heading, 12);
+      walkingRoute = [];
+      player.stopWalking();
+      follow.stopInspect();
+      player.teleport(spawn.x, spawn.z, spawn.heading);
+      follow.skipIntro();
+      follow.snapBehind(spawnYaw);
+      focusedVendorId = null;
+      hud.hideStand();
+      cancelNavigation();
+      clearUrlHash();
+      hud.showToast('Đã về lối vào khu Check-in');
     },
     onMinimapClick: (mx, my) => {
       // Kiểm tra xem click trúng gian hàng nào trong danh sách
@@ -507,12 +532,28 @@ export async function startExperience(o: ExperienceOptions): Promise<Experience>
   const update = (dt: number, t: number) => {
     if (player.hasInput) {
       walkingRoute = [];
+      walkingStuckTime = 0;
       follow.skipIntro();
       if (follow.isInspecting()) follow.stopInspect();
       focusedVendorId = null;
     }
     while (walkingRoute.length && Math.hypot(walkingRoute[0].x - player.position.x, walkingRoute[0].z - player.position.z) < 0.35) walkingRoute.shift();
-    if (walkingRoute.length) player.walkTo(walkingRoute[0].x, walkingRoute[0].z);
+    if (walkingRoute.length) {
+      player.walkTo(walkingRoute[0].x, walkingRoute[0].z);
+      if (player.speed < 0.2 && Math.hypot(walkingRoute[0].x - player.position.x, walkingRoute[0].z - player.position.z) > 0.4) {
+        walkingStuckTime += dt;
+        if (walkingStuckTime > 1.2) {
+          walkingRoute = [];
+          walkingStuckTime = 0;
+          player.stopWalking();
+          hud.showToast('Gặp vật cản, đã dừng tự động đi');
+        }
+      } else {
+        walkingStuckTime = 0;
+      }
+    } else {
+      walkingStuckTime = 0;
+    }
     player.update(dt, follow.forward());
     areas.update(t);
     vendors.update(t, follow.isInspecting() ? focusedVendorId : null);

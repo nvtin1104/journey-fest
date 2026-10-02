@@ -83,7 +83,7 @@ export class Pathfinder {
     return null;
   }
 
-  /** Raycast check on grid using Bresenham */
+  /** Raycast check on grid using Bresenham with diagonal corner checks */
   isLineClear(x0: number, z0: number, x1: number, z1: number): boolean {
     let dx = Math.abs(x1 - x0);
     let dz = Math.abs(z1 - z0);
@@ -97,14 +97,23 @@ export class Pathfinder {
       if (!this.isWalkable(x, z)) return false;
       if (x === x1 && z === z1) break;
       const e2 = 2 * err;
+      let nx = x;
+      let nz = z;
       if (e2 > -dz) {
         err -= dz;
-        x += sx;
+        nx += sx;
       }
       if (e2 < dx) {
         err += dx;
-        z += sz;
+        nz += sz;
       }
+      if (nx !== x && nz !== z) {
+        if (!this.isWalkable(nx, z) || !this.isWalkable(x, nz)) {
+          return false;
+        }
+      }
+      x = nx;
+      z = nz;
     }
     return true;
   }
@@ -113,7 +122,7 @@ export class Pathfinder {
    * Computes smooth path from world (startX, startZ) to (endX, endZ).
    * Returns list of world waypoints including start and end points.
    */
-  findPath(startX: number, startZ: number, endX: number, endZ: number, allowDirectFallback = true): Point2D[] {
+  findPath(startX: number, startZ: number, endX: number, endZ: number, allowDirectFallback = false): Point2D[] {
     const sGrid = this.toGrid(startX, startZ);
     const eGrid = this.toGrid(endX, endZ);
 
@@ -159,7 +168,7 @@ export class Pathfinder {
     const heuristic = (gx: number, gz: number) => {
       const dx = Math.abs(gx - goal.gx);
       const dz = Math.abs(gz - goal.gz);
-      return (dx + dz + (Math.SQRT2 - 2) * Math.min(dx, dz)) * 1.5;
+      return (dx + dz + (Math.SQRT2 - 2) * Math.min(dx, dz)) * 1.05;
     };
 
     gScore[startIndex] = 0;
@@ -223,11 +232,12 @@ export class Pathfinder {
 
     let found = false;
     let iterations = 0;
-    const maxIterations = 50000;
+    const maxIterations = 120000;
 
-    while (heap.length > 0 && iterations++ < maxIterations) {
+    while (heap.length > 0 && iterations < maxIterations) {
       const curr = popHeap();
       if (closed[curr]) continue;
+      iterations++;
       closed[curr] = 1;
 
       if (curr === goalIndex) {
@@ -264,8 +274,8 @@ export class Pathfinder {
     }
 
     if (!found) {
-      if (!allowDirectFallback) return [];
       console.warn('Pathfinder: no path found between points', { start, goal, iterations, heapLen: heap.length });
+      if (!allowDirectFallback) return [];
       return [
         { x: startX, z: startZ },
         { x: endX, z: endZ },

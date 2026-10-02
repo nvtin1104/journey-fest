@@ -34,4 +34,32 @@ describe('Pathfinder', () => {
     expect(path[path.length - 1].x).toBeCloseTo(p.x, 0);
     expect(path[path.length - 1].z).toBeCloseTo(p.z, 0);
   });
+
+  it('finds path from spawn to N22 without direct fallback', () => {
+    const spawnX = toWorldX(SPAWN.x);
+    const spawnZ = toWorldZ(SPAWN.y);
+
+    const n22 = map.stands.find((s) => s.code.includes('N22'));
+    expect(n22).toBeDefined();
+
+    const p = standFront(n22!);
+    const path = pathfinder.findPath(spawnX, spawnZ, p.x, p.z, false);
+    expect(path.length).toBeGreaterThan(5);
+  });
+
+  it('checks which stands fail pathfinding from spawn', () => {
+    const spawnX = toWorldX(SPAWN.x);
+    const spawnZ = toWorldZ(SPAWN.y);
+
+    const failed: string[] = [];
+    for (const s of map.stands) {
+      if (s.kind === 'foodcourt') continue;
+      const p = standFront(s);
+      const path = pathfinder.findPath(spawnX, spawnZ, p.x, p.z, false);
+      if (path.length === 0) {
+        failed.push(s.code || s.name);
+      }
+    }
+    expect(failed).toEqual([]);
+  });
 });

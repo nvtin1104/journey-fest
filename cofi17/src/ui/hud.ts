@@ -201,6 +201,10 @@ export class Hud {
     entrance.setAttribute('aria-label', entrance.title);
     entrance.addEventListener('click', () => {
       this.currentOriginLabel = 'Lối vào Check-in';
+      this.hideStand();
+      if (window.location.hash) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
       this.cb.onGoEntrance();
     });
 
@@ -680,6 +684,9 @@ export class Hud {
     this.card.classList.remove('show');
     this.currentCardStand = null;
     this.currentCardNavState = false;
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
     if (this.activeNavInfo && !this.itemFocused) {
       // Khi đóng card mà vẫn đang dẫn đường, hiện thanh bottom panel để người dùng điều khiển
       this.navBottomPanel.style.display = 'flex';
@@ -804,7 +811,7 @@ export class Hud {
       });
 
       const stopBtn = el('button', 'act-stop-nav');
-      stopBtn.append(makeIcon(X, 15), document.createTextNode(' Dừng chỉ đường'));
+      stopBtn.append(makeIcon(X, 15), document.createTextNode(' Dừng'));
       stopBtn.title = 'Hủy chế độ chỉ đường';
       stopBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1016,7 +1023,16 @@ export class Hud {
       const button = el('button', undefined, label);
       button.type = 'button';
       button.addEventListener('click', () => {
-        if (this.cb.onSetOriginPoint(x, y)) setOriginLabel(label);
+        if (this.cb.onSetOriginPoint(x, y)) {
+          setOriginLabel(label);
+          if (label === 'Check-in') {
+            this.hideStand();
+            this.cb.onCancelNavigation();
+            if (window.location.hash) {
+              history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+          }
+        }
       });
       presetsDiv.append(button);
     };

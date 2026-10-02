@@ -264,6 +264,25 @@ export function buildAreas(map: ParsedMap, atlas: SignAtlas): AreasResult {
     });
   }
 
+  // Biển hiệu cho V.I.P Gate và Artist Only Gate ở phía Đông Hall A1
+  const vipDoor = map.doors.find((d) => d.axis === 'v' && d.at === 3580 && d.from >= -220 && d.to <= -130);
+  if (vipDoor) {
+    const x = toWorldX(vipDoor.at);
+    const z = toWorldZ((vipDoor.from + vipDoor.to) / 2);
+    const tag = makeLabel('V.I.P GATE', 0.85, { bg: 'rgba(230, 81, 0, 0.95)', fg: '#ffffff', size: 52 });
+    tag.position.set(x - 0.2, WALL.height + 0.6, z);
+    group.add(tag);
+  }
+
+  const artistDoor = map.doors.find((d) => d.axis === 'v' && d.at === 3580 && d.from >= 270 && d.to <= 360);
+  if (artistDoor) {
+    const x = toWorldX(artistDoor.at);
+    const z = toWorldZ((artistDoor.from + artistDoor.to) / 2);
+    const tag = makeLabel('ARTIST ONLY GATE', 0.85, { bg: 'rgba(57, 73, 171, 0.95)', fg: '#ffffff', size: 52 });
+    tag.position.set(x - 0.2, WALL.height + 0.6, z);
+    group.add(tag);
+  }
+
   // Zone names float above their area.
   for (const z of map.zones) {
     const { cx, cz } = worldRect(z.rect);

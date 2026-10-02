@@ -303,6 +303,8 @@
 {"id":"8e804a55-88dd-42fd-a762-4defb4f0278d","type":"AREA","areaTypeId":10,"label":"small gate","x":1900,"y":540,"width":120,"height":20,"color":"#38528f","hideLabel":true},
 {"id":"00bfbfb1-208a-4f87-b15f-2a4a494ed617","type":"AREA","areaTypeId":10,"label":"small gate","x":3120,"y":-420,"width":100,"height":20,"color":"#38528f","hideLabel":true},
 {"id":"ec9b1c4f-8ff5-4ff7-91ba-227afedad5f4","type":"AREA","areaTypeId":10,"label":"small gate","x":580,"y":-420,"width":100,"height":20,"color":"#38528f","hideLabel":true},
+{"id":"gate-hall-a1-vip","type":"AREA","areaTypeId":10,"label":"V.I.P Gate","x":3570,"y":-210,"width":20,"height":70,"color":"#38528f","hideLabel":false},
+{"id":"gate-hall-a1-artist","type":"AREA","areaTypeId":10,"label":"Artist Only Gate","x":3570,"y":280,"width":20,"height":70,"color":"#38528f","hideLabel":false},
 {"id":"d231932f-fa22-40bc-a69c-89b41b050e2f","type":"BOOTH","refId":"d231932f-fa22-40bc-a69c-89b41b050e2f","label":"A16","description":"5 Chữ Suy","x":1470,"y":-290,"width":40,"height":40,"color":"#9ed7ff","boothSlot":1,"boothCode2":"A16"},
 {"id":"02f42faf-5df2-4545-9ddd-1370c0481160","type":"BOOTH","refId":"02f42faf-5df2-4545-9ddd-1370c0481160","label":"A15","description":"5 Chữ Suy","x":1410,"y":-290,"width":40,"height":40,"color":"#9ed7ff","boothSlot":1,"boothCode2":"A16"},
 {"id":"8a0ce6ea-3ad0-495d-a01d-b4982f8bf577","type":"BOOTH","refId":"084e2936-a308-40be-9bcb-b58910bbf182","label":"A19","description":"Kawaii Yo x Mèo Mụp","x":1650,"y":-290,"width":40,"height":40,"color":"#9ed7ff","boothSlot":1,"boothCode2":"A20"},
