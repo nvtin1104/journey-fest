@@ -1,0 +1,27 @@
+---
+interface Props {
+  class?: string;
+  style?: string;
+  [key: `data-${string}`]: string | undefined;
+}
+const { class: className, ...rest } = Astro.props;
+---
+
+<svg class:list={['cloud', className]} viewBox="0 0 220 110" aria-hidden="true" focusable="false" {...rest}>
+  <g fill="currentColor">
+    <circle cx="62" cy="68" r="34"></circle>
+    <circle cx="104" cy="48" r="44"></circle>
+    <circle cx="150" cy="62" r="36"></circle>
+    <circle cx="186" cy="80" r="24"></circle>
+    <circle cx="30" cy="84" r="22"></circle>
+    <rect x="30" y="72" width="170" height="34" rx="17"></rect>
+  </g>
+</svg>
+
+<style>
+  .cloud {
+    color: var(--white);
+    filter: drop-shadow(0 10px 0 rgb(29 132 214 / 0.12));
+    pointer-events: none;
+  }
+</style>

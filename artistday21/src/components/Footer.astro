@@ -1,0 +1,122 @@
+---
+import { EVENT, fullAddress } from '../data/event';
+import Logo from './Logo.astro';
+---
+
+<footer class="footer">
+  <svg class="footer__wave" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 40c180-40 360-40 540 0s360 40 540 0 270-30 360-10v50H0Z" fill="#123b4a"></path>
+  </svg>
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <Logo />
+      <p>Artist Day 21: Wasteland — Ngày hội họa sĩ. {EVENT.weekday} {EVENT.dateLabel}, {EVENT.timeLabel}.</p>
+      <address>{EVENT.spot}, {EVENT.venue} – {fullAddress}</address>
+    </div>
+
+    <div class="footer__cols">
+      <div>
+        <p class="footer__h">Theo dõi</p>
+        <a class="fb" href={EVENT.facebook} target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20"
+            ><path
+              fill="currentColor"
+              d="M14 13.5h2.5l1-4H14v-2c0-1 0-2 2-2h1.5V2.1C17.2 2.1 15.9 2 14.5 2 11.5 2 9.5 3.8 9.5 7.1v2.4H6.5v4h3V22h4.5v-8.5Z"
+            ></path></svg
+          >
+          Artist Day Vietnam
+        </a>
+      </div>
+      <div>
+        <p class="footer__h">Đồng hành</p>
+        <p>Fly Media · AEON MALL Tân Phú Celadon</p>
+      </div>
+    </div>
+  </div>
+  <p class="footer__copy container">
+    © 2026 {EVENT.organizer}. All rights reserved. <span aria-hidden="true">♻</span> #ArtistDay #AD21 #Wasteland
+  </p>
+</footer>
+
+<style>
+  .footer {
+    position: relative;
+    margin-top: 40px;
+    padding: 40px 0 calc(28px + var(--bar-h, 0px));
+    background: #123b4a;
+    color: #d8eef5;
+  }
+
+  .footer__wave {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% - 1px);
+    width: 100%;
+    height: 50px;
+  }
+
+  .footer__inner {
+    display: grid;
+    gap: 32px;
+  }
+
+  .footer__brand {
+    display: grid;
+    gap: 12px;
+    max-width: 46ch;
+  }
+
+  .footer__brand p,
+  address {
+    font-style: normal;
+    font-size: 0.95rem;
+    opacity: 0.85;
+  }
+
+  .footer__cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 24px;
+  }
+
+  .footer__h {
+    margin-bottom: 10px;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1rem;
+    color: var(--sun);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .fb {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.1);
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.2s;
+  }
+
+  .fb:hover {
+    background: rgb(255 255 255 / 0.2);
+  }
+
+  .footer__copy {
+    margin-top: 36px;
+    padding-top: 18px;
+    border-top: 1px solid rgb(255 255 255 / 0.15);
+    font-size: 0.85rem;
+    opacity: 0.7;
+  }
+
+  @media (min-width: 860px) {
+    .footer__inner {
+      grid-template-columns: 1.2fr 1fr;
+      align-items: start;
+    }
+  }
+</style>

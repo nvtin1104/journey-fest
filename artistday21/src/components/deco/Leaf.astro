@@ -1,0 +1,33 @@
+---
+interface Props {
+  class?: string;
+  style?: string;
+  tone?: 'leaf' | 'mint' | 'deep';
+  [key: `data-${string}`]: string | undefined;
+}
+const { class: className, tone = 'leaf', ...rest } = Astro.props;
+const fills = {
+  leaf: ['#8fe39b', '#3fae55'],
+  mint: ['#c9f7dc', '#6fd39a'],
+  deep: ['#5cc56f', '#1f7f3f'],
+} as const;
+const [from, to] = fills[tone];
+const id = `leaf-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+<svg class:list={['leaf', className]} viewBox="0 0 64 64" aria-hidden="true" focusable="false" {...rest}>
+  <defs>
+    <linearGradient id={id} x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color={from}></stop>
+      <stop offset="1" stop-color={to}></stop>
+    </linearGradient>
+  </defs>
+  <path d="M6 58C4 30 22 8 58 6c2 34-20 54-52 52Z" fill={`url(#${id})`} stroke="#1f3a4d" stroke-width="2.5" stroke-linejoin="round"></path>
+  <path d="M8 56C22 42 34 30 50 14M22 42l-2-12M32 32l12 2M38 26l-1-10" fill="none" stroke="#1f3a4d" stroke-opacity=".45" stroke-width="2" stroke-linecap="round"></path>
+</svg>
+
+<style>
+  .leaf {
+    pointer-events: none;
+  }
+</style>

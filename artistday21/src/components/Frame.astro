@@ -1,0 +1,165 @@
+---
+import { Image } from 'astro:assets';
+import { Download } from '@lucide/astro';
+import frameImg from '../assets/img/frame-nhan-dien.jpg';
+import { EVENT } from '../data/event';
+
+const steps = [
+  { title: 'Tải frame về', text: 'Nhấn nút bên dưới để tải bộ frame nhận diện chính thức của AD21.' },
+  { title: 'Chèn hình & text', text: 'Thêm ảnh outfit, nickname, vai Character hay Coser — cho người quen dễ “bắt sóng” bạn.' },
+  { title: 'Đăng lên mọi mặt trận', text: 'Khoe lên Facebook, Instagram, TikTok kèm #AD21 #Wasteland để mọi người biết bạn sẽ toả sáng ra sao.' },
+];
+---
+
+<section class="frame section" id="frame" aria-labelledby="frame-title">
+  <div class="container frame__grid">
+    <div class="frame__art" data-reveal="left">
+      <div class="polaroid">
+        <Image
+          src={frameImg}
+          widths={[360, 526]}
+          sizes="(min-width: 960px) 440px, 84vw"
+          alt="Frame nhận diện Artist Day 21 với các biển hiệu Character, Coser và chú mèo đội mũ đỏ"
+          loading="lazy"
+        />
+        <span class="tape tape--1" aria-hidden="true"></span>
+        <span class="tape tape--2" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <div class="frame__copy">
+      <span class="eyebrow" data-reveal>📸 Báo nhận diện</span>
+      <h2 id="frame-title" class="section-title" data-reveal>Tải frame — <span class="highlight">báo nhận diện</span> tại AD21</h2>
+      <p class="section-lead" data-reveal>Hãy để mọi người biết bạn sẽ tỏa sáng ra sao, hay đơn giản để hội bạn nhanh chóng tìm thấy bạn giữa biển người.</p>
+
+      <ol class="steps" data-stagger>
+        {
+          steps.map((s, i) => (
+            <li>
+              <span class="steps__n">{i + 1}</span>
+              <div>
+                <h3>{s.title}</h3>
+                <p>{s.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+
+      <a class="btn frame__cta" href={EVENT.frameUrl} target="_blank" rel="noopener" data-reveal>
+        <Download aria-hidden="true" /> Tải frame nhận diện
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .frame {
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 90% 10%, rgb(255 255 255 / 0.55), transparent 35%),
+      linear-gradient(180deg, var(--cream), var(--peach) 30%, #ffc9b3);
+  }
+
+  .frame__grid {
+    display: grid;
+    gap: 44px;
+  }
+
+  .frame__art {
+    display: flex;
+    justify-content: center;
+  }
+
+  .polaroid {
+    position: relative;
+    width: min(84vw, 420px);
+    padding: 12px 12px 48px;
+    background: var(--white);
+    border: var(--border);
+    border-radius: 10px;
+    box-shadow: 8px 10px 0 var(--ink);
+    rotate: 3deg;
+  }
+
+  .polaroid :global(img) {
+    width: 100%;
+    border-radius: 4px;
+  }
+
+  .tape {
+    position: absolute;
+    width: 96px;
+    height: 28px;
+    background: rgb(168 240 198 / 0.85);
+    border: 1.5px dashed rgb(31 58 77 / 0.35);
+  }
+
+  .tape--1 {
+    top: -12px;
+    left: -18px;
+    rotate: -32deg;
+  }
+
+  .tape--2 {
+    right: -20px;
+    bottom: 30px;
+    rotate: -28deg;
+    background: rgb(255 212 71 / 0.85);
+  }
+
+  .steps {
+    display: grid;
+    gap: 14px;
+    margin: 28px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .steps li {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 16px;
+    background: rgb(255 255 255 / 0.8);
+    border: var(--border);
+    border-radius: 18px;
+  }
+
+  .steps__n {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--coral);
+    color: var(--white);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.2rem;
+    border: var(--border);
+  }
+
+  .steps h3 {
+    font-size: 1.2rem;
+  }
+
+  .steps p {
+    margin-top: 2px;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+
+  .frame__cta {
+    margin-top: 28px;
+  }
+
+  @media (min-width: 960px) {
+    .frame__grid {
+      grid-template-columns: 0.9fr 1.1fr;
+      align-items: center;
+      gap: 72px;
+    }
+  }
+</style>

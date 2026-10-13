@@ -1,0 +1,89 @@
+---
+const a = ['Artist Day 21', 'Wasteland', '08.11.2026', 'AEON MALL Tân Phú Celadon', 'Miễn phí vào cửa'];
+const b = ['Chợ phiên họa sĩ', 'Workshop tái chế', 'Live commission', 'Cosplay', 'OC trading', 'Music save the earth'];
+---
+
+<div class="marquee" aria-hidden="true">
+  <div class="strip strip--a" data-marquee="1">
+    <div class="track">
+      {[0, 1].map(() => <span class="group">{a.map((t) => <span class="item">{t}<i>♻</i></span>)}</span>)}
+    </div>
+  </div>
+  <div class="strip strip--b" data-marquee="-1">
+    <div class="track">
+      {[0, 1].map(() => <span class="group">{b.map((t) => <span class="item">{t}<i>✦</i></span>)}</span>)}
+    </div>
+  </div>
+</div>
+
+<style>
+  .marquee {
+    position: relative;
+    z-index: 2;
+    margin-top: -36px;
+    padding-block: 18px 30px;
+    overflow: hidden;
+    background: linear-gradient(var(--leaf) 0 40%, var(--cream) 40%);
+  }
+
+  .strip {
+    border-block: var(--border);
+    overflow: hidden;
+  }
+
+  .strip--a {
+    position: relative;
+    z-index: 1;
+    background: var(--ink);
+    color: var(--sun);
+    rotate: -2.5deg;
+    margin-inline: -20px;
+  }
+
+  .strip--b {
+    margin-top: -6px;
+    background: var(--coral);
+    color: var(--white);
+    rotate: 1.8deg;
+    margin-inline: -20px;
+  }
+
+  .track {
+    display: flex;
+    width: max-content;
+    animation: marquee 28s linear infinite;
+  }
+
+  .strip--b .track {
+    animation-direction: reverse;
+    animation-duration: 34s;
+  }
+
+  .group {
+    display: flex;
+    flex: none;
+  }
+
+  .item {
+    display: inline-flex;
+    align-items: center;
+    gap: 18px;
+    padding: 10px 0 8px 18px;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1.05rem, 3.4vw, 1.5rem);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .item i {
+    font-style: normal;
+    opacity: 0.85;
+  }
+
+  @keyframes marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+</style>

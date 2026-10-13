@@ -1,0 +1,181 @@
+---
+import { Share2 } from '@lucide/astro';
+import Sparkle from './deco/Sparkle.astro';
+---
+
+<section class="gift" aria-labelledby="gift-title">
+  <div class="container">
+    <div class="gift__card" data-reveal="scale">
+      <Sparkle class="g-sp g-sp1" />
+      <Sparkle class="g-sp g-sp2" />
+      <Sparkle class="g-sp g-sp3" />
+
+      <svg class="box" viewBox="0 0 120 120" aria-hidden="true">
+        <g stroke="#1f3a4d" stroke-width="4" stroke-linejoin="round">
+          <rect x="16" y="52" width="88" height="58" rx="8" fill="#ee3b55"></rect>
+          <rect x="52" y="52" width="16" height="58" fill="#ffd447"></rect>
+          <g class="box__lid">
+            <rect x="8" y="34" width="104" height="22" rx="7" fill="#ff5c75"></rect>
+            <rect x="50" y="34" width="20" height="22" fill="#ffd447"></rect>
+            <path d="M60 34C46 10 22 14 30 30c4 6 18 6 30 4Zm0 0c14-24 38-20 30-4-4 6-18 6-30 4Z" fill="#ffd447"></path>
+          </g>
+        </g>
+      </svg>
+
+      <div class="gift__copy">
+        <p class="gift__kicker">Cơn mưa quà check-in</p>
+        <h2 id="gift-title">GIFT SUPER VIP cho mọi khách tham quan</h2>
+        <p>
+          Bất kể bạn là fan của thể loại gì, AD kì này đều có quà “xịn” chờ bạn. Nhớ đến sớm và xí phần nha! Share sự
+          kiện để rủ hội bạn — ai share nhiều, AD gửi ngàn nụ hôn ❤️
+        </p>
+        <button class="btn btn--white gift__share" type="button" data-share>
+          <Share2 aria-hidden="true" /> Chia sẻ sự kiện
+        </button>
+        <p class="gift__toast" data-share-toast role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .gift {
+    position: relative;
+    padding-block: clamp(40px, 8vw, 90px);
+    background: linear-gradient(180deg, #d4efff, var(--cream));
+  }
+
+  .gift__card {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 20px;
+    padding: clamp(28px, 6vw, 56px);
+    text-align: center;
+    border: var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 8px 9px 0 var(--ink);
+    background:
+      repeating-conic-gradient(from 0deg at 50% 0%, rgb(255 255 255 / 0.18) 0 8deg, transparent 8deg 16deg),
+      linear-gradient(135deg, #ffd447 0%, #ffb15c 55%, #ff7a8a 100%);
+    overflow: hidden;
+  }
+
+  .gift__card :global(.g-sp) {
+    position: absolute;
+    color: var(--white);
+  }
+
+  .gift__card :global(.g-sp1) {
+    width: 34px;
+    top: 18px;
+    left: 18px;
+  }
+
+  .gift__card :global(.g-sp2) {
+    width: 22px;
+    top: 30%;
+    right: 22px;
+    animation-delay: -1s;
+  }
+
+  .gift__card :global(.g-sp3) {
+    width: 26px;
+    bottom: 22px;
+    left: 40%;
+    animation-delay: -1.7s;
+  }
+
+  .box {
+    width: 120px;
+    height: auto;
+    animation: wobble 2.6s ease-in-out infinite;
+    transform-origin: 50% 90%;
+    filter: drop-shadow(4px 5px 0 rgb(31 58 77 / 0.9));
+  }
+
+  .box__lid {
+    animation: lid 2.6s ease-in-out infinite;
+    transform-origin: 60px 56px;
+  }
+
+  @keyframes wobble {
+    0%,
+    60%,
+    100% {
+      transform: rotate(0);
+    }
+    68% {
+      transform: rotate(-8deg);
+    }
+    76% {
+      transform: rotate(7deg);
+    }
+    84% {
+      transform: rotate(-4deg);
+    }
+  }
+
+  @keyframes lid {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+    }
+    72% {
+      transform: translateY(-14px) rotate(-6deg);
+    }
+  }
+
+  .gift__kicker {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--sun);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .gift h2 {
+    margin-top: 12px;
+    font-size: clamp(1.9rem, 6.5vw, 3.2rem);
+    text-wrap: balance;
+  }
+
+  .gift__copy > p:not(.gift__kicker, .gift__toast) {
+    max-width: 56ch;
+    margin: 12px auto 0;
+    font-weight: 600;
+  }
+
+  .gift__share {
+    margin-top: 22px;
+  }
+
+  .gift__toast {
+    min-height: 1.6em;
+    margin-top: 10px;
+    font-weight: 600;
+  }
+
+  @media (min-width: 860px) {
+    .gift__card {
+      grid-template-columns: auto 1fr;
+      justify-items: start;
+      text-align: left;
+      gap: 40px;
+    }
+
+    .box {
+      width: 180px;
+    }
+
+    .gift__copy > p:not(.gift__kicker, .gift__toast) {
+      margin-left: 0;
+    }
+  }
+</style>

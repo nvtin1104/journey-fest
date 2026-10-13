@@ -1,0 +1,16 @@
+---
+interface Props {
+  class?: string;
+  style?: string;
+}
+const { class: className, style } = Astro.props;
+---
+
+<svg class:list={['sparkle', className]} style={style} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <path
+    d="M12 0c1 7.5 4.5 11 12 12-7.5 1-11 4.5-12 12-1-7.5-4.5-11-12-12C7.5 11 11 7.5 12 0Z"
+    fill="currentColor"
+    stroke="#fff"
+    stroke-width="1.2"
+    stroke-linejoin="round"></path>
+</svg>

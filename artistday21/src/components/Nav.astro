@@ -1,0 +1,223 @@
+---
+import { Download, Menu, X } from '@lucide/astro';
+import { EVENT } from '../data/event';
+import Logo from './Logo.astro';
+
+const links = [
+  { href: '#chu-de', label: 'Chủ đề' },
+  { href: '#hoat-dong', label: 'Hoạt động' },
+  { href: '#frame', label: 'Frame nhận diện' },
+  { href: '#dia-diem', label: 'Địa điểm' },
+  { href: '#hoi-dap', label: 'Hỏi đáp' },
+];
+---
+
+<header class="nav" data-nav>
+  <div class="nav__inner container">
+    <a class="nav__brand" href="#top" aria-label="Artist Day 21 – về đầu trang">
+      <Logo />
+    </a>
+
+    <nav class="nav__links" aria-label="Điều hướng chính">
+      <ul>
+        {links.map((l) => <li><a href={l.href}>{l.label}</a></li>)}
+      </ul>
+    </nav>
+
+    <a class="btn btn--sun nav__cta" href={EVENT.frameUrl} target="_blank" rel="noopener">
+      <Download aria-hidden="true" /> Tải frame
+    </a>
+
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="mobile-menu" data-menu-toggle>
+      <Menu class="i-open" aria-hidden="true" />
+      <X class="i-close" aria-hidden="true" />
+      <span class="sr-only">Mở menu</span>
+    </button>
+  </div>
+
+  <div class="sheet" id="mobile-menu" data-menu hidden>
+    <nav aria-label="Menu di động">
+      <ul>
+        {links.map((l, i) => <li style={`--i:${i}`}><a href={l.href}>{l.label}</a></li>)}
+      </ul>
+    </nav>
+    <a class="btn btn--sun sheet__cta" href={EVENT.frameUrl} target="_blank" rel="noopener">
+      <Download aria-hidden="true" /> Tải frame nhận diện
+    </a>
+  </div>
+</header>
+
+<style>
+  .nav {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 50;
+    height: var(--nav-h);
+    transition:
+      background-color 0.3s ease,
+      box-shadow 0.3s ease,
+      transform 0.35s ease;
+  }
+
+  .nav.is-scrolled {
+    background: rgb(255 249 236 / 0.82);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    box-shadow: 0 2px 0 rgb(31 58 77 / 0.12);
+  }
+
+  .nav.is-hidden:not(.is-open) {
+    transform: translateY(-100%);
+  }
+
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 100%;
+  }
+
+  .nav__brand {
+    display: inline-flex;
+    text-decoration: none;
+    margin-right: auto;
+  }
+
+  .nav__links {
+    display: none;
+  }
+
+  .nav__links ul {
+    display: flex;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .nav__links a {
+    display: block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: background-color 0.2s;
+  }
+
+  .nav__links a:hover {
+    background: rgb(255 255 255 / 0.75);
+  }
+
+  .nav__cta {
+    display: none;
+    min-height: 44px;
+    padding: 8px 18px;
+    font-size: 0.95rem;
+  }
+
+  .nav__toggle {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border: var(--border);
+    border-radius: 14px;
+    background: var(--white);
+    color: var(--ink);
+    box-shadow: 3px 3px 0 var(--ink);
+    cursor: pointer;
+  }
+
+  .nav__toggle svg {
+    grid-area: 1 / 1;
+    width: 22px;
+    height: 22px;
+    transition:
+      transform 0.25s var(--ease-pop),
+      opacity 0.2s;
+  }
+
+  .nav__toggle .i-close,
+  .is-open .nav__toggle .i-open {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.6);
+  }
+
+  .is-open .nav__toggle .i-close {
+    opacity: 1;
+    transform: none;
+  }
+
+  .sheet {
+    position: fixed;
+    inset: var(--nav-h) 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 28px var(--gutter) calc(32px + env(safe-area-inset-bottom));
+    background:
+      radial-gradient(circle at 85% 10%, rgb(255 212 71 / 0.45), transparent 40%),
+      radial-gradient(circle at 10% 90%, rgb(168 240 198 / 0.7), transparent 45%),
+      var(--cream);
+    overflow-y: auto;
+  }
+
+  .sheet[hidden] {
+    display: none;
+  }
+
+  .sheet ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sheet li {
+    animation: sheet-in 0.45s var(--ease-pop) both;
+    animation-delay: calc(var(--i) * 55ms);
+  }
+
+  .sheet li a {
+    display: block;
+    padding: 12px 0;
+    border-bottom: 2px dashed rgb(31 58 77 / 0.2);
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1.8rem, 8vw, 2.4rem);
+    text-decoration: none;
+  }
+
+  .sheet__cta {
+    align-self: flex-start;
+  }
+
+  @keyframes sheet-in {
+    from {
+      opacity: 0;
+      transform: translateX(-24px);
+    }
+  }
+
+  @media (min-width: 640px) {
+    .nav__cta {
+      display: inline-flex;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .nav {
+      --nav-h: 76px;
+    }
+
+    .nav__links {
+      display: block;
+    }
+
+    .nav__toggle,
+    .sheet {
+      display: none !important;
+    }
+  }
+</style>

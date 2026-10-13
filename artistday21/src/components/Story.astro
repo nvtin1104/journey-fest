@@ -1,0 +1,200 @@
+---
+import { Leaf as LeafIcon } from '@lucide/astro';
+
+const stats = [
+  { value: 100, suffix: '+', label: 'gian hàng artist' },
+  { value: 8, suffix: '', label: 'khu trải nghiệm' },
+  { value: 0, suffix: 'đ', label: 'vé vào cửa' },
+  { value: 7, suffix: 'h', label: 'quẩy hết mình' },
+];
+---
+
+<section class="story section" id="chu-de" aria-labelledby="story-title">
+  <div class="container story__grid">
+    <div class="story__art" aria-hidden="true">
+      <svg class="sprout" viewBox="0 0 320 420" data-sprout>
+        <!-- wasteland rubble -->
+        <g class="rubble">
+          <path d="M20 400c30-30 70-36 110-22 30-24 80-28 120-6 24-8 44-4 60 10v38H20Z" fill="#c9a77f" stroke="#1f3a4d" stroke-width="3"></path>
+          <rect x="54" y="352" width="44" height="30" rx="6" fill="#8a9aa8" stroke="#1f3a4d" stroke-width="3" transform="rotate(-14 76 367)"></rect>
+          <circle cx="250" cy="372" r="16" fill="#e8a33d" stroke="#1f3a4d" stroke-width="3"></circle>
+          <path d="M196 386l18-34 22 30Z" fill="#9fb3c2" stroke="#1f3a4d" stroke-width="3" stroke-linejoin="round"></path>
+        </g>
+        <!-- stem draws itself while scrolling -->
+        <path
+          class="stem"
+          data-draw
+          d="M160 392C150 330 176 290 158 236s-34-90 4-140c18-24 22-46 14-70"
+          fill="none"
+          stroke="#23934a"
+          stroke-width="12"
+          stroke-linecap="round"></path>
+        <g class="leaves">
+          <path data-leaf data-origin="160 330" d="M160 330c-40-6-70-30-78-62 36-2 66 18 78 62Z" fill="#7ed957" stroke="#1f3a4d" stroke-width="3"></path>
+          <path data-leaf data-origin="164 270" d="M164 270c38-12 74-6 96 18-30 16-70 12-96-18Z" fill="#a8f0c6" stroke="#1f3a4d" stroke-width="3"></path>
+          <path data-leaf data-origin="150 190" d="M150 190c-34-22-48-56-40-86 30 14 46 46 40 86Z" fill="#4cbf5d" stroke="#1f3a4d" stroke-width="3"></path>
+          <path data-leaf data-origin="168 128" d="M168 128c26-28 60-38 90-28-18 28-52 38-90 28Z" fill="#8fe39b" stroke="#1f3a4d" stroke-width="3"></path>
+        </g>
+        <g class="bloom" data-bloom>
+          <circle cx="176" cy="26" r="14" fill="#ffd447" stroke="#1f3a4d" stroke-width="3"></circle>
+          <g fill="#ff7aa2" stroke="#1f3a4d" stroke-width="3">
+            <ellipse cx="176" cy="2" rx="11" ry="14"></ellipse>
+            <ellipse cx="200" cy="22" rx="14" ry="11"></ellipse>
+            <ellipse cx="190" cy="48" rx="11" ry="13" transform="rotate(-30 190 48)"></ellipse>
+            <ellipse cx="160" cy="48" rx="11" ry="13" transform="rotate(30 160 48)"></ellipse>
+            <ellipse cx="152" cy="22" rx="14" ry="11"></ellipse>
+          </g>
+          <circle cx="176" cy="26" r="12" fill="#ffd447"></circle>
+        </g>
+      </svg>
+    </div>
+
+    <div class="story__copy">
+      <span class="eyebrow" data-reveal><LeafIcon aria-hidden="true" width="16" height="16" /> Chủ đề Vol.21</span>
+      <h2 id="story-title" class="section-title" data-reveal>
+        Wasteland — <span class="highlight">khi nghệ thuật hồi sinh</span> sự sống
+      </h2>
+      <div class="story__text">
+        <p data-words>
+          Giữa tàn tích cằn cỗi, đôi bàn tay artist đã thi triển “ma thuật” tái sinh vạn vật! Không chỉ đam mê sáng tạo,
+          thế hệ họa sĩ còn là những người dẫn đầu lối sống xanh: chắt chiu từng mẩu họa cụ cũ, hô biến phế liệu thành
+          kiệt tác.
+        </p>
+        <p data-words>
+          Từng nét cọ chính là lời kêu gọi mạnh mẽ: hãy cùng chung tay bảo vệ môi trường, để viễn cảnh tận thế
+          “Wasteland” vĩnh viễn không bao giờ xảy ra ngoài đời thực!
+        </p>
+        <p class="story__ask" data-reveal>
+          Bạn đã sẵn sàng “du lịch” vào vùng đất này và cùng AD vẽ nên những <strong>“sắc xanh hi vọng”</strong>?
+        </p>
+      </div>
+
+      <ul class="stats" data-stagger>
+        {
+          stats.map((s) => (
+            <li class="stat sticker">
+              <b>
+                <span data-count={s.value}>{s.value}</span>
+                {s.suffix}
+              </b>
+              <span>{s.label}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .story {
+    background:
+      radial-gradient(rgb(31 58 77 / 0.08) 1.2px, transparent 1.4px) 0 0 / 22px 22px,
+      var(--cream);
+  }
+
+  .story__grid {
+    display: grid;
+    gap: 36px;
+  }
+
+  .story__art {
+    display: flex;
+    justify-content: center;
+  }
+
+  .sprout {
+    width: min(52vw, 260px);
+    height: auto;
+    overflow: visible;
+  }
+
+  .story__text {
+    display: grid;
+    gap: 16px;
+    margin-top: 22px;
+    font-size: 1.08em;
+  }
+
+  /* Word-by-word reveal: JS wraps words in <span class="w">; text is fully readable without JS. */
+  .story__text :global(.w) {
+    transition: opacity 0.2s;
+  }
+
+  .story__ask {
+    padding: 16px 18px;
+    border-left: 6px solid var(--leaf);
+    border-radius: 0 16px 16px 0;
+    background: rgb(168 240 198 / 0.45);
+    font-weight: 600;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 32px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px;
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  .stat:nth-child(1) {
+    background: var(--sun-soft);
+  }
+
+  .stat:nth-child(2) {
+    background: var(--sky-mist);
+  }
+
+  .stat:nth-child(3) {
+    background: #ffe1e6;
+  }
+
+  .stat:nth-child(4) {
+    background: #e2f8ea;
+  }
+
+  .stat b {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 8vw, 2.8rem);
+    line-height: 1;
+  }
+
+  .stat > span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  @media (min-width: 640px) {
+    .stats {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 960px) {
+    .story__grid {
+      grid-template-columns: 0.8fr 1.2fr;
+      align-items: center;
+      gap: 64px;
+    }
+
+    .story__art {
+      position: sticky;
+      top: 110px;
+      align-self: start;
+    }
+
+    .sprout {
+      width: 100%;
+      max-width: 380px;
+    }
+  }
+</style>

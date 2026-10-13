@@ -1,0 +1,231 @@
+---
+import { CalendarPlus, Car, Clock, MapPin, Map as MapIcon, Navigation, Ticket } from '@lucide/astro';
+import { EVENT, directionsUrl, fullAddress, mapEmbedUrl } from '../data/event';
+
+const rows = [
+  { icon: Clock, label: 'Thời gian', value: `${EVENT.weekday}, ${EVENT.dateLabel}`, sub: EVENT.timeLabel },
+  { icon: MapPin, label: 'Địa điểm', value: EVENT.venue, sub: fullAddress },
+  { icon: Car, label: 'Lối vào', value: EVENT.spot, sub: 'Đi theo biển chỉ dẫn lên tháp ô tô' },
+  { icon: Ticket, label: 'Vé', value: 'Miễn phí vào cửa', sub: 'Không cần đăng ký trước' },
+];
+---
+
+<section class="info section" id="dia-diem" aria-labelledby="info-title">
+  <div class="container">
+    <header class="info__head">
+      <span class="eyebrow" data-reveal>🗺️ Lịch trình</span>
+      <h2 id="info-title" class="section-title" data-reveal>Hẹn gặp bạn tại AEON MALL Tân Phú</h2>
+    </header>
+
+    <div class="info__grid">
+      <div class="board wood" data-reveal="swing">
+        <span class="board__nail board__nail--l" aria-hidden="true"></span>
+        <span class="board__nail board__nail--r" aria-hidden="true"></span>
+        <dl>
+          {
+            rows.map(({ icon: Icon, label, value, sub }) => (
+              <div class="row">
+                <dt>
+                  <Icon aria-hidden="true" />
+                  <span>{label}</span>
+                </dt>
+                <dd>
+                  <strong>{value}</strong>
+                  <span>{sub}</span>
+                </dd>
+              </div>
+            ))
+          }
+        </dl>
+        <div class="board__actions">
+          <a class="btn" href={directionsUrl} target="_blank" rel="noopener">
+            <Navigation aria-hidden="true" /> Chỉ đường
+          </a>
+          <button class="btn btn--white" type="button" data-ics>
+            <CalendarPlus aria-hidden="true" /> Thêm vào lịch
+          </button>
+        </div>
+      </div>
+
+      <div class="map sticker" data-reveal="right" data-map={mapEmbedUrl}>
+        <div class="map__facade">
+          <MapIcon aria-hidden="true" />
+          <p>
+            <strong>{EVENT.spot}</strong>
+            <span>{EVENT.venue}, {fullAddress}</span>
+          </p>
+          <button class="btn btn--leaf" type="button" data-map-load>Xem bản đồ</button>
+          <noscript><a href={directionsUrl}>Mở Google Maps</a></noscript>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .info {
+    background:
+      radial-gradient(circle at 0% 100%, rgb(168 240 198 / 0.8), transparent 40%),
+      linear-gradient(180deg, #ffc9b3, #e3f8ec 22%);
+  }
+
+  .info__head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .info__grid {
+    display: grid;
+    gap: 28px;
+    margin-top: 44px;
+  }
+
+  .board {
+    padding: 30px clamp(18px, 4vw, 34px) 26px;
+  }
+
+  .board__nail {
+    position: absolute;
+    top: 12px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff6, transparent 40%), var(--bark);
+  }
+
+  .board__nail--l {
+    left: 14px;
+  }
+
+  .board__nail--r {
+    right: 14px;
+  }
+
+  dl {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+  }
+
+  .row {
+    display: grid;
+    gap: 2px;
+    padding: 12px 0;
+    border-bottom: 2px dashed rgb(107 68 35 / 0.35);
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  dt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--bark);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  dt :global(svg) {
+    width: 18px;
+    height: 18px;
+  }
+
+  dd {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+  }
+
+  dd strong {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1.25rem, 4.6vw, 1.6rem);
+    line-height: 1.2;
+    color: var(--teal-ink);
+  }
+
+  dd span {
+    color: #5b3a1d;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .board__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .map {
+    position: relative;
+    min-height: 320px;
+    overflow: hidden;
+    background:
+      linear-gradient(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.5)),
+      repeating-linear-gradient(0deg, #cdeedd 0 2px, transparent 2px 38px),
+      repeating-linear-gradient(90deg, #cdeedd 0 2px, transparent 2px 38px),
+      #eefaf3;
+  }
+
+  .map :global(iframe) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .map__facade {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .map__facade > :global(svg) {
+    width: 56px;
+    height: 56px;
+    color: var(--coral);
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .map__facade p {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map__facade strong {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+  }
+
+  .map__facade span {
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+
+  @media (min-width: 960px) {
+    .info__grid {
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
+      gap: 36px;
+    }
+
+    .map {
+      min-height: 100%;
+    }
+  }
+</style>

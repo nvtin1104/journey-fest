@@ -1,0 +1,73 @@
+---
+// Text-based rendition of the "Artist Day" wordmark: chunky multicolour letters + vol. badge.
+interface Props {
+  size?: 'sm' | 'lg';
+  class?: string;
+}
+const { size = 'sm', class: className } = Astro.props;
+const word1 = ['A', 'R', 'T', 'I', 'S', 'T'];
+const word2 = ['D', 'A', 'Y'];
+const colors = ['#ff5c8a', '#ffb347', '#57c7ff', '#7ed957', '#c58cff', '#ff7a59', '#2fd1b5', '#ffcf3f', '#ff5c8a'];
+---
+
+<span class:list={['logo', `logo--${size}`, className]} aria-label="Artist Day 21" role="img">
+  <span class="logo__row" aria-hidden="true">
+    {word1.map((ch, i) => <span style={`--c:${colors[i]};--i:${i}`}>{ch}</span>)}
+  </span>
+  <span class="logo__row" aria-hidden="true">
+    {word2.map((ch, i) => <span style={`--c:${colors[i + 6]};--i:${i + 6}`}>{ch}</span>)}
+    <b class="logo__vol">21</b>
+  </span>
+</span>
+
+<style>
+  .logo {
+    display: inline-flex;
+    flex-direction: column;
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 0.82;
+    user-select: none;
+  }
+
+  .logo__row {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .logo__row span {
+    display: inline-block;
+    color: var(--c);
+    -webkit-text-stroke: 0.09em var(--ink);
+    paint-order: stroke fill;
+    transform: rotate(calc((var(--i) - 4) * 3deg)) translateY(calc(sin(var(--i) * 1rad) * 0.06em));
+    text-shadow: 0.06em 0.07em 0 var(--ink);
+  }
+
+  .logo__row:last-child {
+    padding-left: 0.6em;
+  }
+
+  .logo__vol {
+    display: inline-grid;
+    place-items: center;
+    width: 1.35em;
+    height: 1.35em;
+    margin-left: 0.2em;
+    border-radius: 50%;
+    border: 0.08em solid var(--ink);
+    background: var(--leaf);
+    color: var(--white);
+    font-size: 0.62em;
+    line-height: 1;
+    box-shadow: 0.06em 0.08em 0 var(--ink);
+  }
+
+  .logo--sm {
+    font-size: 19px;
+  }
+
+  .logo--lg {
+    font-size: clamp(44px, 12vw, 78px);
+  }
+</style>

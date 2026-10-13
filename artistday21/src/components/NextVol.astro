@@ -1,0 +1,142 @@
+---
+import { EVENT } from '../data/event';
+---
+
+<section class="next" aria-labelledby="next-title">
+  <div class="container">
+    <div class="dream" data-reveal="scale">
+      <span class="blob blob--1" aria-hidden="true"></span>
+      <span class="blob blob--2" aria-hidden="true"></span>
+      <span class="blob blob--3" aria-hidden="true"></span>
+      <p class="dream__vol">Vol.22</p>
+      <h2 id="next-title" class="dream__title" data-text="Fever Dream">Fever Dream</h2>
+      <p class="dream__soon">Coming soon<span class="dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></p>
+      <a class="btn btn--white" href={EVENT.facebook} target="_blank" rel="noopener">Theo dõi fanpage để không lỡ</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .next {
+    padding-block: 0 clamp(64px, 10vw, 120px);
+    background: var(--cream);
+  }
+
+  .dream {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: clamp(48px, 9vw, 96px) 24px;
+    overflow: hidden;
+    text-align: center;
+    color: var(--white);
+    border: var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 8px 9px 0 var(--ink);
+    background: linear-gradient(135deg, #2a1b5e, #5b2a86 45%, #b0407f);
+  }
+
+  .blob {
+    position: absolute;
+    z-index: -1;
+    width: 60%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    filter: blur(50px);
+    opacity: 0.75;
+    animation: blob 14s ease-in-out infinite alternate;
+  }
+
+  .blob--1 {
+    top: -30%;
+    left: -10%;
+    background: #ff7ad9;
+  }
+
+  .blob--2 {
+    bottom: -40%;
+    right: -10%;
+    background: #6ad8ff;
+    animation-delay: -5s;
+  }
+
+  .blob--3 {
+    top: 20%;
+    left: 40%;
+    width: 30%;
+    background: #ffd447;
+    opacity: 0.4;
+    animation-delay: -9s;
+  }
+
+  @keyframes blob {
+    to {
+      transform: translate(18%, 12%) scale(1.25);
+    }
+  }
+
+  .dream__vol {
+    padding: 4px 14px;
+    border: 2px solid rgb(255 255 255 / 0.6);
+    border-radius: 999px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .dream__title {
+    position: relative;
+    font-size: clamp(2.8rem, 12vw, 6.5rem);
+    line-height: 1;
+    background: linear-gradient(100deg, #fff 20%, #ffc4f1 40%, #fff 50%, #b9ecff 60%, #fff 80%) 0 0 / 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 5s linear infinite;
+    filter: drop-shadow(0 0 22px rgb(255 160 230 / 0.6));
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: -250% 0;
+    }
+  }
+
+  .dream__soon {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.3rem;
+    opacity: 0.9;
+    margin-bottom: 14px;
+  }
+
+  .dots i {
+    display: inline-block;
+    font-style: normal;
+    animation: dot 1.4s ease-in-out infinite;
+  }
+
+  .dots i:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .dots i:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes dot {
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    40% {
+      transform: translateY(-6px);
+      opacity: 1;
+    }
+  }
+</style>

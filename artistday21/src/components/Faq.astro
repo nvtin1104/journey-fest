@@ -1,0 +1,96 @@
+---
+import { ChevronDown } from '@lucide/astro';
+import { FAQ } from '../data/event';
+---
+
+<section class="faq section" id="hoi-dap" aria-labelledby="faq-title">
+  <div class="container faq__inner">
+    <header>
+      <span class="eyebrow" data-reveal>💬 Hỏi đáp</span>
+      <h2 id="faq-title" class="section-title" data-reveal>Câu hỏi thường gặp</h2>
+    </header>
+
+    <div class="list" data-stagger>
+      {
+        FAQ.map(({ q, a }, i) => (
+          <details class="qa" open={i === 0}>
+            <summary>
+              <span>{q}</span>
+              <ChevronDown aria-hidden="true" />
+            </summary>
+            <p>{a}</p>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq {
+    background: var(--cream);
+  }
+
+  .faq__inner {
+    max-width: 860px;
+  }
+
+  .faq header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .list {
+    display: grid;
+    gap: 14px;
+    margin-top: 40px;
+  }
+
+  .qa {
+    background: var(--white);
+    border: var(--border);
+    border-radius: 18px;
+    box-shadow: 4px 4px 0 var(--ink);
+    transition: box-shadow 0.25s;
+  }
+
+  .qa[open] {
+    box-shadow: 4px 4px 0 var(--leaf);
+  }
+
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 18px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15rem;
+    line-height: 1.3;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary :global(svg) {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    transition: transform 0.3s var(--ease-pop);
+  }
+
+  .qa[open] summary :global(svg) {
+    transform: rotate(180deg);
+  }
+
+  .qa p {
+    padding: 0 18px 18px;
+    color: var(--ink-soft);
+  }
+</style>
